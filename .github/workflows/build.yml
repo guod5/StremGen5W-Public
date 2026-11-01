@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -49,6 +49,79 @@ jobs:
         run: |
           git archive --format=zip --output=dist/StremGen5W-v1.0.0-Source.zip HEAD
           python3 -c "import zipfile; z=zipfile.ZipFile('dist/StremGen5W-v1.0.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+      - name: Validate and name official NEMESIS USB installer
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import shutil
+          import zipfile
+          from io import BytesIO
+          src = pathlib.Path("dist/stremio-gen5w-nemesis-usb.zip")
+          dst = pathlib.Path("dist/StremGen5W-v1.0.0-USB-Installer.zip")
+          with zipfile.ZipFile(src) as z:
+              assert z.testzip() is None
+              assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio.zip"}
+              assert "version=1.0.0" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=1" in z.read("NEMESIS.sh").decode("utf-8")
+              package = z.read("packages/stremio.zip")
+          with zipfile.ZipFile(BytesIO(package)) as z:
+              assert z.testzip() is None
+              assert "version=1.0.0" in z.read("NEMESIS.data").decode("utf-8")
+              apk = z.read("app/StremioGen5W.apk")
+          with zipfile.ZipFile(BytesIO(apk)) as z:
+              assert z.testzip() is None
+              dex = b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))
+              for pattern in (rb"tim[.]llt", rb"verizon[.]net"):
+                  assert re.search(pattern, dex, re.IGNORECASE) is None
+              assert any("stremio_official.png" in n for n in z.namelist())
+          shutil.copyfile(src, dst)
+          print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
+          PY
+          sha256sum dist/StremGen5W-v1.0.0-USB-Installer.zip
+      - name: Publish official v1.0.0 GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          cat > dist/release-notes.md <<'NOTES'
+          ## StremGen5W v1.0.0 — Initial public-ready release
+
+          This is the first release of the standalone StremGen5W project. No development history from the private project is included.
+
+          ### Download and installation
+
+          Download **StremGen5W-v1.0.0-USB-Installer.zip** from **Assets** below. Extract its contents to the root of a USB drive, then run the NEMESIS installer on a compatible Gen5 Android head unit.
+
+          The installer performs a clean reinstall of the Stremio Gen5W app and can clear local login information and caches. Sign in with your own Stremio account after installation.
+
+          ### Included
+
+          - The original full-color Stremio launcher icon
+          - Stremio account sign-in, synced library, Continue Watching, and add-on catalogs
+          - Player controls, audio/subtitle track selection, and bundled FFmpeg audio codecs
+          - Modern TLS support for compatible Android 4.4 servers
+
+          ### Compatibility and safety
+
+          This is an independent community project, not affiliated with Stremio or Hyundai. Third-party stream services may fail. Phone-only data routing has not been confirmed. Use video playback only while parked.
+
+          **Installation may remove existing StremGen5W app data.** This is a test release for compatible head units and not a guarantee of hardware compatibility.
+          NOTES
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release upload v1.0.0 \
+              "dist/StremGen5W-v1.0.0-USB-Installer.zip" --clobber
+            gh release edit v1.0.0 \
+              --title "StremGen5W v1.0.0" --notes-file dist/release-notes.md
+          else
+            gh release create v1.0.0 \
+              "dist/StremGen5W-v1.0.0-USB-Installer.zip" \
+              --title "StremGen5W v1.0.0" \
+              --notes-file dist/release-notes.md \
+              --target "${GITHUB_SHA}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: StremGen5W-build-${{ github.run_number }}
