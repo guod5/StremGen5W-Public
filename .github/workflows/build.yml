@@ -1,0 +1,57 @@
+name: Build Android 4.4 APK and NEMESIS USB installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;21.4.7075529' 'cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify public release contains no hardcoded personal information
+        run: python3 tools/public_release_check.py
+      - name: Build pinned FFmpeg audio codecs for Android 4.4 ARMv7
+        shell: bash
+        run: bash tools/build_ffmpeg_audio.sh
+      - name: Render official Stremio launcher icon
+        shell: bash
+        run: |
+          # Exact official brand asset from github.com/Stremio/stremio-brand.
+          if ! command -v rsvg-convert >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq librsvg2-bin
+          fi
+          mkdir -p app/src/main/res/drawable-nodpi
+          rsvg-convert -w 512 -h 512 branding/stremio-logo-icon-only-fullcolor.svg \
+            -o app/src/main/res/drawable-nodpi/stremio_official.png
+          test -s app/src/main/res/drawable-nodpi/stremio_official.png
+          file app/src/main/res/drawable-nodpi/stremio_official.png
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Package NEMESIS
+        run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
+      - name: Export clean v1.0.0 source without Git history
+        run: |
+          git archive --format=zip --output=dist/StremGen5W-v1.0.0-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/StremGen5W-v1.0.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StremGen5W-build-${{ github.run_number }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            dist/*.zip

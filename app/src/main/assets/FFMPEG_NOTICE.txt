@@ -1,0 +1,16 @@
+StremGen5W - Bundled FFmpeg Audio Decoders
+
+This build includes an ARMv7 audio decoder library compiled from FFmpeg 4.2.11.
+Upstream sources: https://github.com/FFmpeg/FFmpeg/tree/n4.2.11
+Pinned upstream commit: e98a6be89b5554621ece683c824c475cc44b2195
+FFmpeg license: LGPL 2.1 or later (no GPL/nonfree components enabled).
+Source/build instructions: tools/build_ffmpeg_audio.sh in StremGen5W repository.
+Decoder configuration: AAC, MP3, AC3, E-AC3, DTS, TrueHD, FLAC, Vorbis,
+Opus, ALAC, PCM mu-law/A-law, AMR narrowband and wideband.
+
+The ExoPlayer FFmpeg JNI bridge and Java integration are copied from
+Google ExoPlayer v2.15.1 (Apache License 2.0); original license headers are
+preserved in the source files.
+
+FFmpeg audio decode output uses PCM. This build does not modify the vehicle
+codec registry, audio system, VLC, or installed Leafia/SmartTube packages.

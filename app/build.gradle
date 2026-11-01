@@ -1,0 +1,30 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.gen5.stremio'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.gen5.stremio'
+        minSdk 19
+        targetSdk 19
+        ndk { abiFilters 'armeabi-v7a' }
+        versionCode 1
+        versionName '1.0.0'
+    }
+    ndkVersion '21.4.7075529'
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.conscrypt:conscrypt-android:2.5.2'
+    // Legacy ExoPlayer 2.x supporting Android 4.4 (API 19), from Google's Maven repository.
+    // The head unit's existing media.codecs patch supplies working platform codecs.
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.15.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.15.1'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.15.1'
+    implementation 'com.google.android.exoplayer:exoplayer-dash:2.15.1'
+}
