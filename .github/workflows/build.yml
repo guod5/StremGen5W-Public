@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -76,40 +77,31 @@ jobs:
               assert icon_bytes == pathlib.Path("app/src/main/res/drawable-nodpi/stremio_auto_icon.webp").read_bytes(), "Compiled icon differs from selected image"
               assert all("assets/flags/"+code+".png" in z.namelist() for code in ("gb","us","es","fr","de","jp")), "Bundled language flags missing from APK"
               assert b"FlagText" in dex, "Android 4.4 flag renderer missing from APK"
-              assert b"STREMIO AUTO" in dex, "Rebranded in-app name not found"
+              assert b"STREMIO AUTO" in dex, "Stremio Auto app name missing from APK"
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
               for phrase in [b"Motion lockout", b"Disable popup", b"Exit Stremio", b"motion_lockout", b"disable_popup", b"2 mph", b"Yes, Exit", b"VLC integration", b"vlc_integration"]:
-                  assert phrase in dex, f"New settings / exit feature missing from APK: {phrase!r}"
+                  assert phrase in dex, f"Required app setting or control missing from APK: {phrase!r}"
 
 
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
           sha256sum dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip
-      # One-time migration: release v1.0.0 already exists as an obsolete prototype.
-      # Perform this only after APK/installer validation; never rewrite main history.
-      - name: Remove obsolete launch tag after validation
-        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[public-launch-reset]')
+      - name: Publish tagged GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.0" --jq '.object.sha' 2>/dev/null || true)
-          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$GITHUB_SHA" ]; then
-            if gh release view v1.0.0 >/dev/null 2>&1; then
-              gh release delete v1.0.0 --yes --cleanup-tag
-            else
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1.0.0"
-            fi
-          fi
-      - name: Publish official v1.0.0 GitHub Release
-        if: github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
+          set -euo pipefail
+          # Release only when the Git tag matches the APK's actual version.
+          version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          test "$GITHUB_REF_NAME" = "v$version" || {
+            echo "Release tag $GITHUB_REF_NAME does not match versionName $version" >&2
+            exit 1
+          }
           cat > dist/release-notes.md <<'NOTES'
           # Stremio Auto v1.0.0 — Public Launch
 
@@ -136,42 +128,17 @@ jobs:
 
           **Use responsibly. Never watch or operate video while driving.**
           NOTES
-          if gh release view v1.0.0 >/dev/null 2>&1; then
-            gh release upload v1.0.0 \
-              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" --clobber
-            gh release edit v1.0.0 \
-              --title "Stremio Auto v1.0.0" --notes-file dist/release-notes.md
-          else
-            gh release create v1.0.0 \
-              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" \
-              --title "Stremio Auto v1.0.0" \
-              --notes-file dist/release-notes.md \
-              --target "${GITHUB_SHA}"
+          # Never replace assets or source behind an already published version.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite it." >&2
+            exit 1
           fi
-      # Explicitly scoped, one-time release cleanup; only after launch is live.
-      - name: Remove pre-launch releases and tags
-        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[public-launch-reset]')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.0" --jq '.object.sha')
-          test "$tag_sha" = "$GITHUB_SHA" || { echo "Launch tag does not match source"; exit 1; }
-          gh release view v1.0.0 --json assets --jq '.assets[].name' > /tmp/stremio-launch-assets.txt
-          grep -Fx 'Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip' /tmp/stremio-launch-assets.txt
-          grep -Fx 'Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip' /tmp/stremio-launch-assets.txt
-          for old in v1.0.1 v2.0.0 v2.0.1 v2.0.2 v2.0.3 v2.0.4; do
-            if gh release view "$old" >/dev/null 2>&1; then
-              gh release delete "$old" --yes --cleanup-tag
-            elif gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$old" >/dev/null 2>&1; then
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$old"
-            fi
-          done
-          gh release list --limit 25
-          gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags" --jq '.[].ref'
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" \
+            --title "Stremio Auto v1.0.0" \
+            --notes-file dist/release-notes.md \
+            --target "${GITHUB_SHA}"
       - uses: actions/upload-artifact@v4
         with:
           name: StremioAuto-build-${{ github.run_number }}

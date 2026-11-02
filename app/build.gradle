@@ -21,7 +21,7 @@ android {
 
 dependencies {
     implementation 'org.conscrypt:conscrypt-android:2.5.2'
-    // Legacy ExoPlayer 2.x supporting Android 4.4 (API 19), from Google's Maven repository.
+    // ExoPlayer 2.15.1 supports Android 4.4 (API 19); sourced from Google's Maven repository.
     // The head unit's existing media.codecs patch supplies working platform codecs.
     implementation 'com.google.android.exoplayer:exoplayer-core:2.15.1'
     implementation 'com.google.android.exoplayer:exoplayer-ui:2.15.1'
