@@ -27,6 +27,12 @@ The NEMESIS installer checks the existing installation, removes the previous ver
 
 The Android application ID (`com.gen5.stremio`) and NEMESIS package ID (`stremiogen5w`) are stable compatibility identifiers. Keep them unchanged to update existing installations rather than create duplicate apps.
 
+## Optional video codec patch
+
+Stremio Auto bundles FFmpeg **audio** decoders, but its built-in ExoPlayer relies on the head unit's Android video decoders. Some Gen5W head units may benefit from the community [Video Codec Fix (gen5-codec-patch)](https://github.com/KramerTech/gen5-codec-patch), which addresses faulty media codec entries that can prevent third-party video players from working.
+
+**This patch is optional and may not be required.** If video already plays correctly, you may not need it. It is not included with Stremio Auto or installed by our USB installer. The separate NEMESIS patch modifies system codec configuration, so review its compatibility notes and installation instructions before deciding to install it.
+
 ## Building from source
 
 GitHub Actions builds using Java 17, the Android SDK, Gradle, and FFmpeg for Android 4.4 ARMv7. See `.github/workflows/build.yml` and `tools/package_nemesis.py`.
