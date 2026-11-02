@@ -354,8 +354,8 @@ public class MainActivity extends Activity {
   void home(){
     LinearLayout actions=new LinearLayout(this);actions.setOrientation(0);
     actions.setGravity(Gravity.CENTER_VERTICAL);
-    TextView heading=text("Your Stremio",20);heading.setTypeface(null,1);
-    actions.addView(heading,new LinearLayout.LayoutParams(0,dp(56),1));
+    TextView homeHeading=text("Your Stremio",20);homeHeading.setTypeface(null,1);
+    actions.addView(homeHeading,new LinearLayout.LayoutParams(0,dp(56),1));
     Button exit=btn("Exit Stremio",new Runnable(){public void run(){confirmExitStremio();}});
     exit.setTextSize(15);exit.setBackgroundDrawable(shape(surface,12));
     actions.addView(exit,new LinearLayout.LayoutParams(dp(175),dp(52)));

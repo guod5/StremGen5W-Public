@@ -2,7 +2,7 @@
 
 StremGen5W is a community-built Android media client for compatible Hyundai Motor Group Gen5 head units with NEMESIS installed. It provides a Stremio account sign-in, synced library and add-on catalog support, and a custom media player.
 
-**Public release:** v1.0.2
+**Public release:** v2.0.0
 
 ## Features
 - Sign in to your own Stremio account to sync your library, Continue Watching, and installed add-ons.
