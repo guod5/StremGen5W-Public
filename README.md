@@ -9,7 +9,7 @@ StremGen5W is a community-built Android media client for compatible Hyundai Moto
 - Browse movie, series, and compatible add-on catalogs.
 - Play supported streams with audio/subtitle track selection, playback controls, video resizing, and video-only picture brightness adjustment.
 - Android 4.4 (API 19) ARMv7 build with FFmpeg audio support and modern TLS support for compatible servers.
-- NEMESIS USB installer, APK, and buildable source code.\n- Mandatory parked-use acknowledgment each time the app is launched, before video playback is available. Tap **I'm Parked - Continue** to proceed or **Exit App** to leave. This is a user confirmation, not automatic vehicle gear-position detection.
+- NEMESIS USB installer, APK, and buildable source code.\n- Mandatory parked-use acknowledgment each time the app is launched, before video playback is available. Tap **I'm Parked - Continue** to proceed or **Exit App** to leave. This is a user confirmation, not automatic vehicle gear-position detection. With further GPS based lockout. 
 
 ## Install
 The release includes a NEMESIS USB ZIP. Extract its contents to the USB drive root, then run the installer from NEMESIS. The installer can perform a clean reinstall of the app package and validates the Android package version after installation.
