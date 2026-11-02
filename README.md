@@ -6,7 +6,7 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Current release:** v2.0.1 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Current release:** v2.0.2 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
@@ -20,7 +20,7 @@ Functionality depends on stream formats, third-party add-ons, network conditions
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 
@@ -41,6 +41,6 @@ No account email, login token, personal library, or other user-specific credenti
 
 ## Attribution and notices
 
-This community project is **completely unofficial**. Stremio and its name/logo are owned by their respective rights holders. The official Stremio launcher icon is used as identifying artwork, not as a claim of affiliation; see `branding/README.md`. FFmpeg licensing notices are included in `app/src/main/assets`.
+This community project is **completely unofficial**. Stremio and its name/logo are owned by their respective rights holders. The launcher uses a customized purple-to-blue Stremio-style design with an IONIQ-inspired pixel play triangle; it is an unofficial community modification and not an official Stremio logo. See `branding/README.md`. FFmpeg licensing notices are included in `app/src/main/assets`.
 
 Please contribute improvements, bug reports, and pull requests. This project exists because the author wanted a working client on an older Android head unit and hopes other people can make it better.

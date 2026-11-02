@@ -28,27 +28,20 @@ jobs:
       - name: Build pinned FFmpeg audio codecs for Android 4.4 ARMv7
         shell: bash
         run: bash tools/build_ffmpeg_audio.sh
-      - name: Render official Stremio launcher icon
+      - name: Verify selected Stremio Auto pixel launcher icon
         shell: bash
         run: |
-          # Exact official brand asset from github.com/Stremio/stremio-brand.
-          if ! command -v rsvg-convert >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq librsvg2-bin
-          fi
-          mkdir -p app/src/main/res/drawable-nodpi
-          rsvg-convert -w 512 -h 512 branding/stremio-logo-icon-only-fullcolor.svg \
-            -o app/src/main/res/drawable-nodpi/stremio_official.png
-          test -s app/src/main/res/drawable-nodpi/stremio_official.png
-          file app/src/main/res/drawable-nodpi/stremio_official.png
+          test -s app/src/main/res/drawable-nodpi/stremio_auto_icon.webp
+          echo 'c9f15f0074cb946b70355d9c8adb2f075d8fe5212424303ba3d96c6dd9194397  app/src/main/res/drawable-nodpi/stremio_auto_icon.webp' | sha256sum --check
+          file app/src/main/res/drawable-nodpi/stremio_auto_icon.webp
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v2.0.1 source without Git history
+      - name: Export clean v2.0.2 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -60,17 +53,17 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=2.0.1" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=21" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=2.0.2" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=22" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=2.0.1" in data and "name=Stremio Auto" in data
+              assert "version=2.0.2" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
               apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
@@ -78,7 +71,9 @@ jobs:
               dex = b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))
               for pattern in (rb"tim[.]llt", rb"verizon[.]net"):
                   assert re.search(pattern, dex, re.IGNORECASE) is None
-              assert any("stremio_official.png" in n for n in z.namelist())
+              assert any("stremio_auto_icon.webp" in n for n in z.namelist()), "Pixel launcher icon missing from APK"
+              icon_bytes = next(z.read(n) for n in z.namelist() if n.endswith("/stremio_auto_icon.webp"))
+              assert icon_bytes == pathlib.Path("app/src/main/res/drawable-nodpi/stremio_auto_icon.webp").read_bytes(), "Compiled icon differs from selected image"
               assert b"STREMIO AUTO" in dex, "Rebranded in-app name not found"
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
@@ -90,28 +85,28 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip
-      - name: Publish official v2.0.1 GitHub Release
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip
+      - name: Publish official v2.0.2 GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           cat > dist/release-notes.md <<'NOTES'
-          ## Stremio Auto v2.0.1 — New app name and installer branding
+          ## Stremio Auto v2.0.2 — IONIQ pixel launcher icon
 
           **Stremio Auto is a completely unofficial, independent side project.** It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS. This hobby project was created to get a usable Stremio-style app running on older Android 4.4 head units. It is not as feature-rich or polished as the official Stremio apps. Bug reports and community pull requests are very welcome.
 
           ### Download and installation
 
-          Download **Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
+          Download **Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
 
           **The clean installer removes the prior app version and clears locally saved login, artwork cache and settings.** Sign in again after upgrading.
 
           ### What's new
 
-          - Renamed the app to **Stremio Auto** in the Android launcher, in-app headers and NEMESIS package.
-          - Branded USB installer, package and source ZIP filenames.
+          - New launcher icon featuring the user's selected white IONIQ-style pixel play triangle inside the original purple-to-blue diamond look.
+          - Previous Stremio Auto naming, installer structure and functionality are retained.
           - The existing Settings screen, optional GPS motion lockout (off by default), saved popup preference, and confirmed Exit Stremio action remain.
           - Stremio account, library/add-on browsing, in-app ExoPlayer, bundled FFmpeg audio support, audio/subtitle controls, and VLC fallback remain.
 
@@ -121,17 +116,17 @@ jobs:
 
           This is experimental community software, not an official Stremio release. GPS movement information has not been verified on every compatible head unit. Neither GPS movement status nor Wireless CarPlay proves phone-only routing. Use responsibly and **never watch or operate video while driving.**
           NOTES
-          if gh release view v2.0.1 >/dev/null 2>&1; then
-            gh release upload v2.0.1 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip" --clobber
-            gh release edit v2.0.1 \
-              --title "Stremio Auto v2.0.1" --notes-file dist/release-notes.md
+          if gh release view v2.0.2 >/dev/null 2>&1; then
+            gh release upload v2.0.2 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip" --clobber
+            gh release edit v2.0.2 \
+              --title "Stremio Auto v2.0.2" --notes-file dist/release-notes.md
           else
-            gh release create v2.0.1 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip" \
-              --title "Stremio Auto v2.0.1" \
+            gh release create v2.0.2 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip" \
+              --title "Stremio Auto v2.0.2" \
               --notes-file dist/release-notes.md \
               --target "${GITHUB_SHA}"
           fi
