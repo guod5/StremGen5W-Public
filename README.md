@@ -6,7 +6,7 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Current release:** v2.0.4 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Public launch:** v1.0.0 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
@@ -21,11 +21,11 @@ Functionality depends on stream formats, third-party add-ons, network conditions
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 
-The Android application ID and NEMESIS internal package ID intentionally stay the same as the earlier StremGen5W versions. They are internal compatibility identifiers, not the name displayed in the car, and allow existing installations to be replaced rather than duplicated.
+The Android application ID (`com.gen5.stremio`) and NEMESIS package ID (`stremiogen5w`) are stable compatibility identifiers. Keep them unchanged to update existing installations rather than create duplicate apps.
 
 ## Building from source
 

@@ -38,10 +38,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v2.0.4 source without Git history
+      - name: Export clean v1.0.0 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.4-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.4-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -53,17 +53,17 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=2.0.4" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=24" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=1.0.0" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=25" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=2.0.4" in data and "name=Stremio Auto" in data
+              assert "version=1.0.0" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
               apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
@@ -87,52 +87,91 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip
-      - name: Publish official v2.0.4 GitHub Release
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip
+      # One-time migration: release v1.0.0 already exists as an obsolete prototype.
+      # Perform this only after APK/installer validation; never rewrite main history.
+      - name: Remove obsolete launch tag after validation
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[public-launch-reset]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.0" --jq '.object.sha' 2>/dev/null || true)
+          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$GITHUB_SHA" ]; then
+            if gh release view v1.0.0 >/dev/null 2>&1; then
+              gh release delete v1.0.0 --yes --cleanup-tag
+            else
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1.0.0"
+            fi
+          fi
+      - name: Publish official v1.0.0 GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           cat > dist/release-notes.md <<'NOTES'
-          ## Stremio Auto v2.0.4 — English audio and source flag emoji
+          # Stremio Auto v1.0.0 — Public Launch
 
-          **Stremio Auto is a completely unofficial, independent side project.** It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS. This hobby project was created to get a usable Stremio-style app running on older Android 4.4 head units. It is not as feature-rich or polished as the official Stremio apps. Bug reports and community pull requests are very welcome.
+          Stremio Auto is an **unofficial, community-built Stremio-compatible client** for compatible Android 4.4 Hyundai Motor Group Gen5 head units running NEMESIS. This experimental hobby project was created through extensive AI-assisted development. It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS.
 
-          ### Download and installation
+          ### Install using a NEMESIS USB drive
 
-          Download **Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
+          Download **Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip**. Extract its three contents to the root of a USB drive, insert it into a compatible NEMESIS-enabled head unit, and accept the installation prompt.
 
-          **The clean installer removes the prior app version and clears locally saved login, artwork cache and settings.** Sign in again after upgrading.
+          **A clean reinstall resets the app's saved login, preferences, and caches.** Sign in to Stremio again afterward. This installer targets only the Stremio Auto package, not other NEMESIS applications.
 
-          ### What's new
+          ### Features
 
-          - Prefer supported English audio tracks automatically even when the stream defaults to another language. Users can still select any available soundtrack manually.
-          - Add offline country-flag emoji graphics for source titles and language indicators on older Android 4.4 head units. Includes 69 common flags.
-          - Preserve the optional VLC integration setting, enlarged Watch button, bundled FFmpeg codecs, and selected IONIQ pixel launcher icon.
-          - The existing Settings screen, optional GPS motion lockout (off by default), saved popup preference, and confirmed Exit Stremio action remain.
-          - Stremio account, library/add-on browsing, in-app ExoPlayer, bundled FFmpeg audio support, audio/subtitle controls, and VLC fallback remain.
+          - Stremio account, compatible library and Continue Watching, add-on catalogs, search, and browse.
+          - In-app ExoPlayer with seeking, aspect ratio, audio and subtitle selection, preferred English soundtrack, and bundled FFmpeg audio decoding.
+          - Bundled language flag graphics for older Android 4.4 screens.
+          - Optional VLC handoff setting, with a larger Watch button when off.
+          - Parked-use reminder settings, optional experimental GPS motion lockout, and Exit Stremio.
+          - Selected purple-blue pixel-play launcher icon and compatible NEMESIS USB installer.
 
-          Internal Android and NEMESIS package IDs are intentionally retained to replace earlier installations rather than installing a duplicate app.
+          ### Limitations and safe use
 
-          ### Limitations and responsible use
+          This is experimental software, not an official Stremio app. Some codecs, sources, synchronization and controls may not work on every head unit. Wireless CarPlay phone-only data routing is unverified. Contributions and bug reports are welcome.
 
-          This is experimental community software, not an official Stremio release. GPS movement information has not been verified on every compatible head unit. Neither GPS movement status nor Wireless CarPlay proves phone-only routing. Use responsibly and **never watch or operate video while driving.**
+          **Use responsibly. Never watch or operate video while driving.**
           NOTES
-          if gh release view v2.0.4 >/dev/null 2>&1; then
-            gh release upload v2.0.4 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.4-Source.zip" --clobber
-            gh release edit v2.0.4 \
-              --title "Stremio Auto v2.0.4" --notes-file dist/release-notes.md
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release upload v1.0.0 \
+              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" --clobber
+            gh release edit v1.0.0 \
+              --title "Stremio Auto v1.0.0" --notes-file dist/release-notes.md
           else
-            gh release create v2.0.4 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.4-Source.zip" \
-              --title "Stremio Auto v2.0.4" \
+            gh release create v1.0.0 \
+              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" \
+              --title "Stremio Auto v1.0.0" \
               --notes-file dist/release-notes.md \
               --target "${GITHUB_SHA}"
           fi
+      # Explicitly scoped, one-time release cleanup; only after launch is live.
+      - name: Remove pre-launch releases and tags
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[public-launch-reset]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.0" --jq '.object.sha')
+          test "$tag_sha" = "$GITHUB_SHA" || { echo "Launch tag does not match source"; exit 1; }
+          gh release view v1.0.0 --json assets --jq '.assets[].name' > /tmp/stremio-launch-assets.txt
+          grep -Fx 'Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip' /tmp/stremio-launch-assets.txt
+          grep -Fx 'Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip' /tmp/stremio-launch-assets.txt
+          for old in v1.0.1 v2.0.0 v2.0.1 v2.0.2 v2.0.3 v2.0.4; do
+            if gh release view "$old" >/dev/null 2>&1; then
+              gh release delete "$old" --yes --cleanup-tag
+            elif gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$old" >/dev/null 2>&1; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$old"
+            fi
+          done
+          gh release list --limit 25
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags" --jq '.[].ref'
       - uses: actions/upload-artifact@v4
         with:
           name: StremioAuto-build-${{ github.run_number }}
