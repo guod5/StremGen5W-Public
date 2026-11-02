@@ -6,12 +6,13 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Current release:** v2.0.3 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Current release:** v2.0.4 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
 - Sign in to your own Stremio account and access compatible library, Continue Watching, add-on, movie, and series content.
-- Play supported video sources inside the app with ExoPlayer, audio/subtitle options, controls, and resizing.
+- Play supported video sources inside the app with ExoPlayer, audio/subtitle options, controls, and resizing. Prefer supported English soundtracks automatically when the stream identifies their language; users can select another track manually.
+- Render common country flags and language indicators as bundled images on Android 4.4 rather than relying on unsupported system flag emoji fonts.
 - Use bundled FFmpeg audio codec support on Android 4.4 (API 19, ARMv7).
 - Use VLC as an optional fallback if installed. The **VLC integration** switch under Settings defaults on; switch it off to hide VLC playback actions and enlarge the **Watch** button on stream cards.
 - Install using a NEMESIS USB ZIP and build from the included Android source.
@@ -20,7 +21,7 @@ Functionality depends on stream formats, third-party add-ons, network conditions
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v2.0.4-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 
@@ -38,6 +39,10 @@ No account email, login token, personal library, or other user-specific credenti
 - Third-party add-ons or streaming endpoints may be unavailable or incompatible.
 - Phone-only data routing has not been independently confirmed. Wireless CarPlay alone does not establish that the app uses a phone's data connection.
 - **Use responsibly. Do not watch or operate video while driving.**
+
+## Flag graphics
+
+Country flags use locally bundled [Twemoji](https://github.com/jdecked/twemoji) artwork. Twemoji graphics are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Copyright and credit to the Twemoji contributors. The images are used unmodified. Flag coverage is currently limited to the bundled set; other country codes remain visible as text.
 
 ## Attribution and notices
 

@@ -1497,9 +1497,13 @@ public class MainActivity extends Activity {
         LinearLayout details=new LinearLayout(this);details.setOrientation(1);
         String tags=sourceTags(stream);
         if("720p".equals(streamQuality(stream)))tags="✓ RECOMMENDED  •  "+tags;
-        TextView h=text(tags,15);h.setTypeface(null,1);h.setTextColor("720p".equals(streamQuality(stream))?accent:Color.WHITE);
+        String flags=FlagText.indicators(stream.optString("name","")+" "+stream.optString("title",""));
+        if(!flags.isEmpty())tags+="  •  "+flags;
+        TextView h=text(tags,15);h.setText(FlagText.decorate(this,tags));
+        h.setTypeface(null,1);h.setTextColor("720p".equals(streamQuality(stream))?accent:Color.WHITE);
         h.setPadding(dp(6),dp(2),dp(6),dp(2));details.addView(h);
-        TextView about=text(firstInfoLine(stream),13);about.setMaxLines(2);
+        String summary=firstInfoLine(stream);
+        TextView about=text(summary,13);about.setText(FlagText.decorate(this,summary));about.setMaxLines(2);
         about.setEllipsize(android.text.TextUtils.TruncateAt.END);
         about.setPadding(dp(6),0,dp(6),dp(2));details.addView(about);
         row.addView(details,new LinearLayout.LayoutParams(0,-2,1));
@@ -1517,7 +1521,9 @@ public class MainActivity extends Activity {
           alternative.setTextSize(12);alternative.setEnabled(direct);
           row.addView(alternative,new LinearLayout.LayoutParams(dp(66),dp(58)));
         }
-        final TextView expanded=text(sourceExpandedDetails(stream,addon),13);
+        String expandedCopy=sourceExpandedDetails(stream,addon);
+        final TextView expanded=text(expandedCopy,13);
+        expanded.setText(FlagText.decorate(this,expandedCopy));
         expanded.setPadding(dp(10),dp(4),dp(8),dp(5));
         expanded.setVisibility(View.GONE);
         Button info=btn("Details",new Runnable(){public void run(){

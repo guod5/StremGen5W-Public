@@ -86,6 +86,8 @@ public class ExoPlayerActivity extends Activity {
   private TextView motionDialogText;
   private float savedWindowBrightness=WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
   private boolean trackMessageShown=false;
+  private boolean manualAudioSelected=false;
+  private String selectedEnglishTrackKey="";
   private float fingerX,fingerY;
   private final Handler handler=new Handler();
   private static final int TEAL=0xff35dfc7, WHITE=Color.WHITE, PANEL=0xdc121824;
@@ -454,12 +456,11 @@ public class ExoPlayerActivity extends Activity {
       renderers.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
       renderers.setEnableDecoderFallback(true);
       selector=new DefaultTrackSelector(this);
-      // Prefer English audio automatically when the stream supplies it,
-      // while choosing AAC over unsupported AC3/DTS when possible.
-      // Users can still override this in Audio / Language for each video.
+      // Language comes first. The explicit supported-track selection below
+      // prefers AAC only when comparing multiple English soundtracks.
       selector.setParameters(selector.buildUponParameters()
         .setPreferredAudioLanguage("en")
-        .setPreferredAudioMimeType("audio/mp4a-latm"));
+        .setPreferredAudioMimeType(null));
       player=new SimpleExoPlayer.Builder(this,renderers).setTrackSelector(selector).build();
       player.setAudioAttributes(new AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA).setContentType(C.CONTENT_TYPE_MOVIE).build(),true);
@@ -471,6 +472,10 @@ public class ExoPlayerActivity extends Activity {
         }
       });
       player.addListener(new Player.EventListener(){
+        @Override public void onTracksChanged(TrackGroupArray groups,
+          com.google.android.exoplayer2.trackselection.TrackSelectionArray selections){
+          if(!released){preferEnglishAudio();updateAudioTrackInfo();}
+        }
         @Override public void onPlayerStateChanged(boolean ready,int state){
           if(released)return;
           if(state==Player.STATE_READY){
@@ -525,6 +530,86 @@ public class ExoPlayerActivity extends Activity {
       renderer=r;group=g;track=t;this.supported=supported;name=n;
     }
   }
+  /** "en", "eng", and labeled English variants all qualify for autoplay. */
+  private boolean englishAudio(Format format){
+    String language=format.language==null?"":format.language.toLowerCase(Locale.US).replace('_','-');
+    if(language.equals("en")||language.equals("eng")||
+       language.startsWith("en-")||language.startsWith("eng-"))return true;
+    String label=format.label==null?"":format.label.toLowerCase(Locale.US);
+    return label.matches(".*\\b(english|eng|en)\\b.*");
+  }
+
+  /**
+   * Prefer a decodable English audio track even when a source marks another
+   * language as default. Explicit user-selected soundtracks always win.
+   * No metadata -> no guessing based on source filenames or countries.
+   */
+  private void preferEnglishAudio(){
+    if(released||manualAudioSelected||selector==null)return;
+    MappedTrackInfo map=selector.getCurrentMappedTrackInfo();
+    if(map==null)return;
+    int winnerRenderer=-1,winnerGroup=-1,winnerTrack=-1,bestScore=Integer.MIN_VALUE;
+    String winnerKey="";
+    for(int r=0;r<map.getRendererCount();r++){
+      if(map.getRendererType(r)!=C.TRACK_TYPE_AUDIO)continue;
+      TrackGroupArray groups=map.getTrackGroups(r);
+      for(int g=0;g<groups.length;g++){
+        TrackGroup group=groups.get(g);
+        for(int t=0;t<group.length;t++){
+          Format format=group.getFormat(t);
+          if(map.getTrackSupport(r,g,t)!=C.FORMAT_HANDLED||!englishAudio(format))continue;
+          int score=100;
+          String codec=format.sampleMimeType==null?"":format.sampleMimeType;
+          if("audio/mp4a-latm".equals(codec))score+=12;
+          if(format.channelCount>0)score+=Math.min(format.channelCount,8);
+          if(format.label!=null){
+            String label=format.label.toLowerCase(Locale.US);
+            if(label.contains("commentary")||label.contains("description")||
+               label.contains("descriptive"))score-=60;
+          }
+          if(score>bestScore){
+            bestScore=score;winnerRenderer=r;winnerGroup=g;winnerTrack=t;
+            winnerKey=r+":"+g+":"+t+":"+
+              (format.id==null?"":format.id)+":"+
+              (format.language==null?"":format.language)+":"+
+              (format.label==null?"":format.label);
+          }
+        }
+      }
+    }
+    if(winnerRenderer<0){
+      // Let ExoPlayer choose a playable default when no English track is identified.
+      if(selectedEnglishTrackKey.length()>0){
+        selectedEnglishTrackKey="";
+        DefaultTrackSelector.ParametersBuilder reset=selector.buildUponParameters();
+        for(int r=0;r<map.getRendererCount();r++){
+          if(map.getRendererType(r)==C.TRACK_TYPE_AUDIO){
+            reset.clearSelectionOverrides(r);
+            reset.setRendererDisabled(r,false);
+          }
+        }
+        reset.setPreferredAudioLanguage("en");
+        reset.setPreferredAudioMimeType(null);
+        selector.setParameters(reset);
+      }
+      return;
+    }
+    if(winnerKey.equals(selectedEnglishTrackKey))return;
+    selectedEnglishTrackKey=winnerKey;
+    DefaultTrackSelector.ParametersBuilder settings=selector.buildUponParameters();
+    for(int r=0;r<map.getRendererCount();r++){
+      if(map.getRendererType(r)==C.TRACK_TYPE_AUDIO){
+        settings.clearSelectionOverrides(r);
+        settings.setRendererDisabled(r,r!=winnerRenderer);
+      }
+    }
+    settings.setPreferredAudioLanguage("en");
+    settings.setPreferredAudioMimeType(null);
+    settings.setSelectionOverride(winnerRenderer,map.getTrackGroups(winnerRenderer),
+      new DefaultTrackSelector.SelectionOverride(winnerGroup,winnerTrack));
+    selector.setParameters(settings);
+  }
+
   private String nameTrack(Format format,int kind){
     StringBuilder label=new StringBuilder();
     if(format.label!=null&&!format.label.isEmpty())label.append(format.label).append(" • ");
@@ -720,12 +805,24 @@ public class ExoPlayerActivity extends Activity {
             }
           }
           if(audio){
+            manualAudioSelected=false;
+            selectedEnglishTrackKey="";
             settings.setPreferredAudioLanguage("en");
-            settings.setPreferredAudioMimeType("audio/mp4a-latm");
+            settings.setPreferredAudioMimeType(null);
           }
           if(!audio&&subtitleButton!=null)subtitleButton.setText(
             choice==null?"CC  Off":"CC  Subtitles");
         }else{
+          if(audio){
+            manualAudioSelected=true;
+            selectedEnglishTrackKey="";
+            for(int r=0;r<map.getRendererCount();r++){
+              if(map.getRendererType(r)==C.TRACK_TYPE_AUDIO){
+                settings.clearSelectionOverrides(r);
+                settings.setRendererDisabled(r,r!=choice.renderer);
+              }
+            }
+          }
           settings.setRendererDisabled(choice.renderer,false);
           settings.setSelectionOverride(choice.renderer,map.getTrackGroups(choice.renderer),
             new DefaultTrackSelector.SelectionOverride(choice.group,choice.track));
