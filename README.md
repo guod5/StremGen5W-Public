@@ -6,21 +6,21 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Current release:** v2.0.2 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Current release:** v2.0.3 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
 - Sign in to your own Stremio account and access compatible library, Continue Watching, add-on, movie, and series content.
 - Play supported video sources inside the app with ExoPlayer, audio/subtitle options, controls, and resizing.
 - Use bundled FFmpeg audio codec support on Android 4.4 (API 19, ARMv7).
-- Open VLC as an optional fallback if it is installed and the built-in player cannot handle a source.
+- Use VLC as an optional fallback if installed. The **VLC integration** switch under Settings defaults on; switch it off to hide VLC playback actions and enlarge the **Watch** button on stream cards.
 - Install using a NEMESIS USB ZIP and build from the included Android source.
 
 Functionality depends on stream formats, third-party add-ons, network conditions, and the head unit's firmware. Not every feature from the official Stremio applications is implemented.
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 

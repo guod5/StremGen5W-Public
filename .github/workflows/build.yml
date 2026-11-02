@@ -38,10 +38,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v2.0.2 source without Git history
+      - name: Export clean v2.0.3 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.3-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.3-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -53,17 +53,17 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=2.0.2" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=22" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=2.0.3" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=23" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=2.0.2" in data and "name=Stremio Auto" in data
+              assert "version=2.0.3" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
               apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
@@ -78,35 +78,36 @@ jobs:
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
-              for phrase in [b"Motion lockout", b"Disable popup", b"Exit Stremio", b"motion_lockout", b"disable_popup", b"2 mph", b"Yes, Exit"]:
+              for phrase in [b"Motion lockout", b"Disable popup", b"Exit Stremio", b"motion_lockout", b"disable_popup", b"2 mph", b"Yes, Exit", b"VLC integration", b"vlc_integration"]:
                   assert phrase in dex, f"New settings / exit feature missing from APK: {phrase!r}"
 
 
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip
-      - name: Publish official v2.0.2 GitHub Release
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip
+      - name: Publish official v2.0.3 GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           cat > dist/release-notes.md <<'NOTES'
-          ## Stremio Auto v2.0.2 — IONIQ pixel launcher icon
+          ## Stremio Auto v2.0.3 — Optional VLC integration
 
           **Stremio Auto is a completely unofficial, independent side project.** It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS. This hobby project was created to get a usable Stremio-style app running on older Android 4.4 head units. It is not as feature-rich or polished as the official Stremio apps. Bug reports and community pull requests are very welcome.
 
           ### Download and installation
 
-          Download **Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
+          Download **Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
 
           **The clean installer removes the prior app version and clears locally saved login, artwork cache and settings.** Sign in again after upgrading.
 
           ### What's new
 
-          - New launcher icon featuring the user's selected white IONIQ-style pixel play triangle inside the original purple-to-blue diamond look.
-          - Previous Stremio Auto naming, installer structure and functionality are retained.
+          - New **VLC integration** switch in Settings, enabled by default to preserve existing behavior.
+          - Turning it off removes VLC playback actions from the stream list and built-in player, and enlarges the high-contrast **Watch** button.
+          - Player fallback prompts also respect the new preference; the selected IONIQ pixel launcher icon and installer compatibility remain unchanged.
           - The existing Settings screen, optional GPS motion lockout (off by default), saved popup preference, and confirmed Exit Stremio action remain.
           - Stremio account, library/add-on browsing, in-app ExoPlayer, bundled FFmpeg audio support, audio/subtitle controls, and VLC fallback remain.
 
@@ -116,17 +117,17 @@ jobs:
 
           This is experimental community software, not an official Stremio release. GPS movement information has not been verified on every compatible head unit. Neither GPS movement status nor Wireless CarPlay proves phone-only routing. Use responsibly and **never watch or operate video while driving.**
           NOTES
-          if gh release view v2.0.2 >/dev/null 2>&1; then
-            gh release upload v2.0.2 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip" --clobber
-            gh release edit v2.0.2 \
-              --title "Stremio Auto v2.0.2" --notes-file dist/release-notes.md
+          if gh release view v2.0.3 >/dev/null 2>&1; then
+            gh release upload v2.0.3 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.3-Source.zip" --clobber
+            gh release edit v2.0.3 \
+              --title "Stremio Auto v2.0.3" --notes-file dist/release-notes.md
           else
-            gh release create v2.0.2 \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-USB-Installer.zip" \
-              "dist/Stremio-gen5-hmg-nemesis-v2.0.2-Source.zip" \
-              --title "Stremio Auto v2.0.2" \
+            gh release create v2.0.3 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.3-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.3-Source.zip" \
+              --title "Stremio Auto v2.0.3" \
               --notes-file dist/release-notes.md \
               --target "${GITHUB_SHA}"
           fi

@@ -454,6 +454,30 @@ public class MainActivity extends Activity {
         }
       }
     });
+
+    View vlcDivider=new View(this);vlcDivider.setBackgroundColor(0xff323c49);
+    LinearLayout.LayoutParams vlcLine=new LinearLayout.LayoutParams(-1,dp(1));
+    vlcLine.setMargins(dp(13),dp(16),dp(13),dp(12));body.addView(vlcDivider,vlcLine);
+
+    final Switch vlcSwitch=new Switch(this);
+    vlcSwitch.setText("VLC integration");
+    vlcSwitch.setTextColor(Color.WHITE);vlcSwitch.setTextSize(19);
+    vlcSwitch.setPadding(dp(14),dp(12),dp(12),dp(12));
+    vlcSwitch.setMinHeight(dp(63));
+    vlcSwitch.setChecked(vlcIntegrationEnabled());
+    add(vlcSwitch);
+    add(text("On by default. Show VLC as an alternative player on stream cards and in playback controls. Turn off to hide VLC and make the Watch button larger.",14));
+    vlcSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+      public void onCheckedChanged(CompoundButton button,boolean enabled){
+        prefs.edit().putBoolean("vlc_integration",enabled).apply();
+        // The stream screen and player read this choice whenever they open.
+      }
+    });
+  }
+
+  // VLC fallback is optional. Preserve existing behavior for upgrades and first installs.
+  boolean vlcIntegrationEnabled(){
+    return prefs==null||prefs.getBoolean("vlc_integration",true);
   }
 
   void updateMotionMonitoring(){
@@ -1305,7 +1329,9 @@ public class MainActivity extends Activity {
   void showManualProgress(){
     if(auth.isEmpty())return;
     add(text("SYNC WATCH PROGRESS",18));
-    add(text("After VLC closes, playback progress syncs automatically if VLC reports its actual position. Otherwise enter the minute reached and tap Save.",14));
+    add(text(vlcIntegrationEnabled()?
+      "After VLC closes, playback progress syncs automatically if VLC reports its actual position. Otherwise enter the minute reached and tap Save.":
+      "If playback progress did not sync, enter the minute reached and tap Save.",14));
     final EditText minutes=new EditText(this);styleField(minutes);
     minutes.setHint("Minutes watched, for example 37");
     minutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -1414,6 +1440,7 @@ public class MainActivity extends Activity {
   void drawSources(){
     if(sourcePanel==null||!"Streams".equals(page)||!visibleStreamTitle.equals(selectedType+"|"+selectedId))return;
     sourcePanel.removeAllViews();
+    final boolean showVlc=vlcIntegrationEnabled();
     int entries=0,playable=0,low=0,high=0;
     for(JSONObject response:visibleSources.values()){
       JSONArray arr=response==null?null:response.optJSONArray("streams");
@@ -1477,11 +1504,19 @@ public class MainActivity extends Activity {
         about.setPadding(dp(6),0,dp(6),dp(2));details.addView(about);
         row.addView(details,new LinearLayout.LayoutParams(0,-2,1));
         Button play=btn(direct?"▶ Watch":"Unavailable",new Runnable(){public void run(){if(direct)openInAppPlayer(url);}});
-        play.setEnabled(direct);play.setTextSize(14);
-        row.addView(play,new LinearLayout.LayoutParams(dp(111),dp(58)));
-        Button alternative=btn("VLC",new Runnable(){public void run(){if(direct)openVlc(url);}});
-        alternative.setTextSize(12);alternative.setEnabled(direct);
-        row.addView(alternative,new LinearLayout.LayoutParams(dp(66),dp(58)));
+        play.setEnabled(direct);play.setTextSize(showVlc?14:17);
+        if(!showVlc){
+          play.setTypeface(null,1);
+          play.setBackgroundDrawable(shape(accent,10));
+          play.setTextColor(0xff071312);
+        }
+        // Reclaim the VLC button's space for a larger, high-contrast primary action.
+        row.addView(play,new LinearLayout.LayoutParams(dp(showVlc?111:188),dp(showVlc?58:66)));
+        if(showVlc){
+          Button alternative=btn("VLC",new Runnable(){public void run(){if(direct)openVlc(url);}});
+          alternative.setTextSize(12);alternative.setEnabled(direct);
+          row.addView(alternative,new LinearLayout.LayoutParams(dp(66),dp(58)));
+        }
         final TextView expanded=text(sourceExpandedDetails(stream,addon),13);
         expanded.setPadding(dp(10),dp(4),dp(8),dp(5));
         expanded.setVisibility(View.GONE);
@@ -1513,7 +1548,9 @@ public class MainActivity extends Activity {
     sourceRequests=0;
     TextView heading=text(selectedName.isEmpty()?selectedId:selectedName,21);
     heading.setTypeface(null,1);heading.setPadding(dp(8),dp(1),dp(8),dp(2));add(heading);
-    TextView tip=text("720p H.264 recommended • Watch plays inside Stremio Auto • one Back returns here • VLC fallback for unsupported streams.",13);
+    TextView tip=text(vlcIntegrationEnabled()?
+      "720p H.264 recommended • Watch plays inside Stremio Auto • one Back returns here • VLC fallback for unsupported streams.":
+      "720p H.264 recommended • Watch plays inside Stremio Auto • one Back returns here.",13);
     tip.setPadding(dp(8),dp(1),dp(8),dp(5));add(tip);
     LinearLayout controls=new LinearLayout(this);controls.setOrientation(0);
     for(final String choice:new String[]{"All","720p","1080p","Other"}){
@@ -1597,7 +1634,8 @@ public class MainActivity extends Activity {
       next.putExtra("stream_title",selectedName);
       startActivityForResult(next,103);
     }catch(Throwable problem){
-      message("In-app player unavailable: "+problem.getClass().getSimpleName()+". Use VLC fallback.");
+      message("In-app player unavailable: "+problem.getClass().getSimpleName()+
+        (vlcIntegrationEnabled()?". Use VLC fallback.":". Try another source."));
     }
   }
   void openWithOtherPlayer(final String url){
@@ -1612,6 +1650,7 @@ public class MainActivity extends Activity {
     }catch(Exception e){message("No compatible alternative player is installed. VLC remains available.");}
   }
   void openVlc(final String link){
+    if(!vlcIntegrationEnabled())return;
     if(!parkedConfirmed){showParkedConfirmation();return;}
     try{
       Intent intent=new Intent(Intent.ACTION_VIEW);
@@ -1632,7 +1671,7 @@ public class MainActivity extends Activity {
     super.onActivityResult(requestCode,resultCode,data);
     if(requestCode==103){
       String fallback=data==null?"":data.getStringExtra("fallback_vlc_url");
-      if(fallback!=null&&!fallback.isEmpty()){openVlc(fallback);return;}
+      if(vlcIntegrationEnabled()&&fallback!=null&&!fallback.isEmpty()){openVlc(fallback);return;}
       if(data!=null&&resultCode==RESULT_OK){
         long position=data.getLongExtra("extra_position",-1L);
         long duration=data.getLongExtra("extra_duration",-1L);

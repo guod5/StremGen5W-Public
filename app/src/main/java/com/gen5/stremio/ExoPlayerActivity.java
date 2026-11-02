@@ -124,12 +124,18 @@ public class ExoPlayerActivity extends Activity {
       if(pauseButton!=null)pauseButton.setText(player.getPlayWhenReady()?"Ⅱ":"▶");
       if(!firstFrame && System.currentTimeMillis()-openedAt>22000 &&
         player.getPlaybackState()==Player.STATE_BUFFERING && status!=null){
-        status.setText("Still buffering. Select a different source or try VLC.");
+        status.setText(vlcIntegrationEnabled()?
+          "Still buffering. Select a different source or try VLC.":
+          "Still buffering. Select a different source.");
         status.setVisibility(View.VISIBLE);
       }
     }catch(Throwable ignored){}
     handler.postDelayed(this,750);
   }};
+
+  private boolean vlcIntegrationEnabled(){
+    return getSharedPreferences("account",0).getBoolean("vlc_integration",true);
+  }
 
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+0.5f);}
   private String time(long ms){
@@ -422,9 +428,13 @@ public class ExoPlayerActivity extends Activity {
     spaced(utilities,aspectButton,92,42,5);
     Button brightnessButton=tool("☀  Light",new View.OnClickListener(){public void onClick(View v){showBrightness();}});
     spaced(utilities,brightnessButton,94,42,5);
-    Button vlc=tool("VLC  ↗",new View.OnClickListener(){public void onClick(View v){exit(streamUrl);}});
-    vlc.setTextColor(TEAL);
-    spaced(utilities,vlc,90,42,5);
+    if(vlcIntegrationEnabled()){
+      Button vlc=tool("VLC  ↗",new View.OnClickListener(){public void onClick(View v){
+        if(vlcIntegrationEnabled())exit(streamUrl);
+      }});
+      vlc.setTextColor(TEAL);
+      spaced(utilities,vlc,90,42,5);
+    }
     bottomPanel.addView(utilities);
     root.addView(bottomPanel,new FrameLayout.LayoutParams(-1,dp(136),Gravity.BOTTOM));
 
@@ -477,7 +487,8 @@ public class ExoPlayerActivity extends Activity {
           if(released)return;
           Throwable why=error.getCause();
           String type=why==null?error.getClass().getSimpleName():why.getClass().getSimpleName();
-          status("Cannot play this format ("+type+"). Try another source or Open VLC.");
+          status("Cannot play this format ("+type+"). "+
+            (vlcIntegrationEnabled()?"Try another source or Open VLC.":"Try another source."));
           showControls(true);
         }
       });
@@ -500,7 +511,8 @@ public class ExoPlayerActivity extends Activity {
       handler.postDelayed(progressRunnable,500);
       showControls(true);
     }catch(Throwable failure){
-      status("Playback setup failed: "+failure.getClass().getSimpleName()+". Try VLC.");
+      status("Playback setup failed: "+failure.getClass().getSimpleName()+
+        (vlcIntegrationEnabled()?". Try VLC.":". Try another source."));
       showControls(true);
     }
   }
@@ -670,7 +682,9 @@ public class ExoPlayerActivity extends Activity {
     int actual=audio?choices.size()-1:choices.size()-2;
     if(actual==0){
       TextView empty=small(audio?
-        "This source has no selectable audio tracks. Try a different source or VLC if audio is silent.":
+        (vlcIntegrationEnabled()?
+          "This source has no selectable audio tracks. Try a different source or VLC if audio is silent.":
+          "This source has no selectable audio tracks. Try a different source if audio is silent."):
         "No selectable subtitle tracks were provided. Text burned into the picture cannot be switched off.");
       empty.setPadding(dp(15),dp(14),dp(15),dp(15));
       rows.addView(empty);
@@ -839,7 +853,7 @@ public class ExoPlayerActivity extends Activity {
     Intent response=new Intent();
     response.putExtra("extra_position",lastPosition);
     response.putExtra("extra_duration",lastDuration);
-    if(fallback!=null)response.putExtra("fallback_vlc_url",fallback);
+    if(fallback!=null&&vlcIntegrationEnabled())response.putExtra("fallback_vlc_url",fallback);
     setResult(RESULT_OK,response);
     restoreBrightness();
     finish();
