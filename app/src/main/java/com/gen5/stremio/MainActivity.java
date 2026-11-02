@@ -29,6 +29,10 @@ public class MainActivity extends Activity {
   LinearLayout root,body; String page="Home",auth="",selectedId="",selectedType="movie";
   ArrayList<String> history=new ArrayList<String>(); JSONArray addons=new JSONArray(); JSONArray libraryItems=new JSONArray(); boolean returningFromPlayer=false; int generation=0; ArrayList<String> errors=new ArrayList<String>(); boolean routeVerified=false; String selectedName=""; final String CINEMETA="https://v3-cinemeta.strem.io/";
   float sx,sy; android.content.SharedPreferences prefs;
+  // This is deliberately a per-launch user acknowledgement, not a vehicle Park sensor.
+  // Never persist approval: each new launch must ask the user again.
+  boolean parkedConfirmed=false;
+  Dialog parkedDialog;
   final java.util.HashMap<String,String> artworkCache=new java.util.HashMap<String,String>();
   int posterLoaded=0,posterFailed=0,posterMissing=0; String lastPosterError="";
   String verifiedAccountEmail=""; boolean accountIdentityLoading=false;
@@ -105,6 +109,53 @@ public class MainActivity extends Activity {
     if((prefs.getBoolean("external_playback",false)||"Streams".equals(restore)||"Player".equals(restore)||"Streams".equals(prefs.getString("last_page","")))&&!selectedId.isEmpty())
       render("Streams",false);else render("Home",false);
     if(!auth.isEmpty()){refreshAccountIdentity();refreshAddons();refreshLibrary(false);}
+    showParkedConfirmation();
+  }
+  void showParkedConfirmation(){
+    if(parkedConfirmed||isFinishing()||(parkedDialog!=null&&parkedDialog.isShowing()))return;
+    final Dialog dialog=new Dialog(this);
+    parkedDialog=dialog;
+    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+    dialog.setCancelable(false);
+    dialog.setCanceledOnTouchOutside(false);
+    LinearLayout panel=new LinearLayout(this);
+    panel.setOrientation(1);
+    panel.setPadding(dp(19),dp(16),dp(19),dp(16));
+    panel.setBackgroundDrawable(shape(surface,17));
+    TextView heading=text("PARKED VEHICLE REQUIRED",20);
+    heading.setTextColor(accent);
+    heading.setTypeface(null,1);
+    heading.setPadding(dp(8),dp(1),dp(8),dp(4));
+    panel.addView(heading);
+    TextView copy=text("Confirm your vehicle is fully parked. Video playback is for use only while parked. Never watch or operate video while driving.",16);
+    copy.setTextColor(Color.WHITE);
+    copy.setPadding(dp(8),dp(2),dp(8),dp(12));
+    panel.addView(copy);
+    LinearLayout actions=new LinearLayout(this);
+    actions.setOrientation(0);
+    Button exit=btn("Exit App",new Runnable(){public void run(){dialog.dismiss();parkedDialog=null;finish();}});
+    Button confirm=btn("I'm Parked - Continue",new Runnable(){public void run(){
+      parkedConfirmed=true;dialog.dismiss();parkedDialog=null;
+    }});
+    exit.setTextSize(15);confirm.setTextSize(15);
+    confirm.setBackgroundDrawable(shape(accent,12));
+    confirm.setTextColor(0xff071312);
+    LinearLayout.LayoutParams exitLayout=new LinearLayout.LayoutParams(0,dp(53),1);
+    exitLayout.setMargins(0,0,dp(8),0);
+    actions.addView(exit,exitLayout);
+    actions.addView(confirm,new LinearLayout.LayoutParams(0,dp(53),2));
+    panel.addView(actions);
+    dialog.setContentView(panel);
+    dialog.show();
+    Window window=dialog.getWindow();
+    if(window!=null){
+      window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+      window.setLayout(Math.min(getResources().getDisplayMetrics().widthPixels-dp(26),dp(720)),WindowManager.LayoutParams.WRAP_CONTENT);
+      window.setGravity(Gravity.CENTER);
+      window.getDecorView().setSystemUiVisibility(
+        View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    }
   }
   void immersiveWindow(){
     getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -1375,6 +1426,7 @@ public class MainActivity extends Activity {
     showManualProgress();
   }
   void openInAppPlayer(final String url){
+    if(!parkedConfirmed){showParkedConfirmation();return;}
     if(url==null||(!url.startsWith("http://")&&!url.startsWith("https://"))){
       message("This source does not provide a direct video URL.");return;
     }
@@ -1382,6 +1434,7 @@ public class MainActivity extends Activity {
     prefs.edit().putString("last_page","Streams").apply();
     try{
       Intent next=new Intent(this,ExoPlayerActivity.class);
+      next.putExtra("parked_confirmed",parkedConfirmed);
       next.putExtra("stream_url",url);
       next.putExtra("stream_title",selectedName);
       startActivityForResult(next,103);
@@ -1390,6 +1443,7 @@ public class MainActivity extends Activity {
     }
   }
   void openWithOtherPlayer(final String url){
+    if(!parkedConfirmed){showParkedConfirmation();return;}
     try{
       Intent play=new Intent(Intent.ACTION_VIEW);play.setDataAndType(android.net.Uri.parse(url),"video/*");
       Intent choose=Intent.createChooser(play,"Select a video player");
@@ -1400,7 +1454,7 @@ public class MainActivity extends Activity {
     }catch(Exception e){message("No compatible alternative player is installed. VLC remains available.");}
   }
   void openVlc(final String link){
-    // No extra confirmation dialog. The user selects a stream while parked.
+    if(!parkedConfirmed){showParkedConfirmation();return;}
     try{
       Intent intent=new Intent(Intent.ACTION_VIEW);
       intent.setDataAndType(android.net.Uri.parse(link),"video/*");
@@ -1465,6 +1519,7 @@ public class MainActivity extends Activity {
     }
   }
   @Override protected void onDestroy(){
+    if(parkedDialog!=null){parkedDialog.dismiss();parkedDialog=null;}
     refreshHandler.removeCallbacks(homeRefresh);
     apiWorkers.shutdownNow();catalogWorkers.shutdownNow();sportsWorkers.shutdownNow();imageWorkers.shutdownNow();
     super.onDestroy();

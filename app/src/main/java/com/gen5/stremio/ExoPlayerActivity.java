@@ -287,6 +287,8 @@ public class ExoPlayerActivity extends Activity {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     immersiveWindow();
     setVolumeControlStream(AudioManager.STREAM_MUSIC);
+    // The in-app player must only be started after the foreground parking acknowledgement.
+    if(!getIntent().getBooleanExtra("parked_confirmed",false)){finish();return;}
     streamUrl=getIntent().getStringExtra("stream_url");
     videoTitle=getIntent().getStringExtra("stream_title");
     if(videoTitle==null)videoTitle="StremGen5W";
