@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build StremGen5W for NEMESIS USB with an opt-in, one-confirmation clean reinstall.
+"""Build Stremio Auto for NEMESIS USB with an opt-in, one-confirmation clean reinstall.
 
 NEMESIS USB type=execute runs the short script as root after a Yes/No prompt.
 The script only removes the package ID stremiogen5w, preflights the replacement
@@ -24,37 +24,37 @@ if not code_match:
     raise SystemExit("APK versionCode missing")
 version_code = int(code_match.group(1))
 
-package = out / "stremio-gen5w-nemesis-package.zip"
+package = out / "stremio-auto-nemesis-package.zip"
 manifest = (
     "[nemesis]\n"
     "version=" + version + "\n"
     "id=stremiogen5w\n"
-    "name=Stremio Gen5W\n"
+    "name=Stremio Auto\n"
     "types=application\n\n"
     "[app.0]\n"
     "kind=apk\n"
-    "path=app/StremioGen5W.apk\n"
+    "path=app/StremioAuto.apk\n"
     "package=com.gen5.stremio\n"
     "component=com.gen5.stremio/com.gen5.stremio.MainActivity\n"
 )
 with zipfile.ZipFile(package, "w", zipfile.ZIP_DEFLATED) as archive:
     archive.writestr("NEMESIS.data", manifest)
-    archive.write(apk, "app/StremioGen5W.apk")
+    archive.write(apk, "app/StremioAuto.apk")
 with zipfile.ZipFile(package) as archive:
     if archive.testzip() is not None:
         raise SystemExit("Invalid inner package ZIP")
     assert "NEMESIS.data" in archive.namelist()
-    assert "app/StremioGen5W.apk" in archive.namelist()
+    assert "app/StremioAuto.apk" in archive.namelist()
 
 # This shell is invoked only by NEMESIS USB type=execute after the user's Yes.
 # Do not execute in recovery (Android down); do not touch any unrelated package.
 clean_install = """#!/system/bin/sh
 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
 NEMESIS=/system/xbin/nemesis
-PKG=packages/stremio.zip
+PKG=packages/stremio-auto.zip
 APP=com.gen5.stremio
 EXPECTED_CODE=__VERSION_CODE__
-LOG=/data/nemesis/stremio-clean-install.log
+LOG=/data/nemesis/stremio-auto-install.log
 
 say() {
   echo "$1"
@@ -110,7 +110,7 @@ fi
 DUMP=$(/system/bin/dumpsys package "$APP" 2>&1)
 case "$DUMP" in
   *"versionCode=$EXPECTED_CODE"*)
-    say "VERIFIED: Android installed StremGen5W versionCode $EXPECTED_CODE."
+    say "VERIFIED: Android installed Stremio Auto versionCode $EXPECTED_CODE."
     ;;
   *)
     say "INSTALL VERIFICATION FAILED: Android did not report versionCode $EXPECTED_CODE."
@@ -118,23 +118,23 @@ case "$DUMP" in
     exit 18
     ;;
 esac
-say "Stremio Gen5W clean installation verified."
+say "Stremio Auto clean installation verified."
 exit 0
 """
 clean_install = clean_install.replace("__VERSION_CODE__", str(version_code))
-usb = out / "stremio-gen5w-nemesis-usb.zip"
+usb = out / "stremio-auto-nemesis-usb.zip"
 with zipfile.ZipFile(usb, "w", zipfile.ZIP_DEFLATED) as archive:
     archive.writestr(
         "NEMESIS.data",
         "[nemesis]\nversion=" + version + "\ntype=execute\npath=NEMESIS.sh\n",
     )
     archive.writestr("NEMESIS.sh", clean_install)
-    archive.write(package, "packages/stremio.zip")
+    archive.write(package, "packages/stremio-auto.zip")
 
 with zipfile.ZipFile(usb) as archive:
     if archive.testzip() is not None:
         raise SystemExit("Invalid USB ZIP")
-    required = {"NEMESIS.data", "NEMESIS.sh", "packages/stremio.zip"}
+    required = {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
     if set(archive.namelist()) != required:
         raise SystemExit("USB package has unexpected contents")
 print(usb)

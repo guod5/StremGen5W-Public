@@ -45,37 +45,41 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v2.0.0 source without Git history
+      - name: Export clean v2.0.1 source without Git history
         run: |
-          git archive --format=zip --output=dist/StremGen5W-v2.0.0-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/StremGen5W-v2.0.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
+          grep -F 'android:label="Stremio Auto"' app/src/main/AndroidManifest.xml
           python3 - <<'PY'
           import pathlib
           import re
           import shutil
           import zipfile
           from io import BytesIO
-          src = pathlib.Path("dist/stremio-gen5w-nemesis-usb.zip")
-          dst = pathlib.Path("dist/StremGen5W-v2.0.0-USB-Installer.zip")
+          src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
-              assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio.zip"}
-              assert "version=2.0.0" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=20" in z.read("NEMESIS.sh").decode("utf-8")
-              package = z.read("packages/stremio.zip")
+              assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
+              assert "version=2.0.1" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=21" in z.read("NEMESIS.sh").decode("utf-8")
+              package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
-              assert "version=2.0.0" in z.read("NEMESIS.data").decode("utf-8")
-              apk = z.read("app/StremioGen5W.apk")
+              data = z.read("NEMESIS.data").decode("utf-8")
+              assert "version=2.0.1" in data and "name=Stremio Auto" in data
+              assert "path=app/StremioAuto.apk" in data
+              apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
               assert z.testzip() is None
               dex = b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))
               for pattern in (rb"tim[.]llt", rb"verizon[.]net"):
                   assert re.search(pattern, dex, re.IGNORECASE) is None
               assert any("stremio_official.png" in n for n in z.namelist())
+              assert b"STREMIO AUTO" in dex, "Rebranded in-app name not found"
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
@@ -86,54 +90,54 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/StremGen5W-v2.0.0-USB-Installer.zip
-      - name: Publish official v2.0.0 GitHub Release
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip
+      - name: Publish official v2.0.1 GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           cat > dist/release-notes.md <<'NOTES'
-          ## StremGen5W v2.0.0 — Settings, Motion lockout and Exit
+          ## Stremio Auto v2.0.1 — New app name and installer branding
 
-          Version 2.0 introduces saved Settings for Motion lockout (off by default; 2 mph GPS threshold) and Disable popup (off by default), plus an Exit Stremio action on Home. With the popup enabled, the parked-use reminder appears once per app launch. Confirmed Exit Stremio stops this app's background workers and closes its Android process.
+          **Stremio Auto is a completely unofficial, independent side project.** It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS. This hobby project was created to get a usable Stremio-style app running on older Android 4.4 head units. It is not as feature-rich or polished as the official Stremio apps. Bug reports and community pull requests are very welcome.
 
           ### Download and installation
 
-          Download **StremGen5W-v2.0.0-USB-Installer.zip** from **Assets** below. Extract its contents to the root of a USB drive, then run the NEMESIS installer on a compatible Gen5 Android head unit.
+          Download **Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip** from Assets below. Extract its three items directly to the root of a USB drive, insert it into a compatible NEMESIS-enabled HMG Gen5 head unit, and accept the installation prompt.
 
-          The installer performs a clean reinstall of the Stremio Gen5W app and can clear local login information and caches. Sign in with your own Stremio account after installation.
+          **The clean installer removes the prior app version and clears locally saved login, artwork cache and settings.** Sign in again after upgrading.
 
-          ### Included
+          ### What's new
 
-          - Optional GPS motion soft lock for built-in video playback, default OFF, threshold 2 mph
-          - Saved popup preference and Home Exit Stremio action
-          - The original full-color Stremio launcher icon
-          - Stremio account sign-in, synced library, Continue Watching, and add-on catalogs
-          - Player controls, audio/subtitle track selection, and bundled FFmpeg audio codecs
-          - Modern TLS support for compatible Android 4.4 servers
+          - Renamed the app to **Stremio Auto** in the Android launcher, in-app headers and NEMESIS package.
+          - Branded USB installer, package and source ZIP filenames.
+          - The existing Settings screen, optional GPS motion lockout (off by default), saved popup preference, and confirmed Exit Stremio action remain.
+          - Stremio account, library/add-on browsing, in-app ExoPlayer, bundled FFmpeg audio support, audio/subtitle controls, and VLC fallback remain.
 
-          ### Compatibility and safety
+          Internal Android and NEMESIS package IDs are intentionally retained to replace earlier installations rather than installing a duplicate app.
 
-          This is an independent community project, not affiliated with Stremio or Hyundai. Optional motion lockout relies on Android GPS readings that have not been validated on every target head unit. When enabled, missing GPS keeps in-app playback paused; stationary GPS is not proof of parked status. VLC is not controlled by the motion lockout. Third-party stream services may fail, and phone-only data routing has not been confirmed. Never use video while driving.
+          ### Limitations and responsible use
 
-          **Installation may remove existing StremGen5W app data.** This is a test release for compatible head units and not a guarantee of hardware compatibility.
+          This is experimental community software, not an official Stremio release. GPS movement information has not been verified on every compatible head unit. Neither GPS movement status nor Wireless CarPlay proves phone-only routing. Use responsibly and **never watch or operate video while driving.**
           NOTES
-          if gh release view v2.0.0 >/dev/null 2>&1; then
-            gh release upload v2.0.0 \
-              "dist/StremGen5W-v2.0.0-USB-Installer.zip" --clobber
-            gh release edit v2.0.0 \
-              --title "StremGen5W v2.0.0" --notes-file dist/release-notes.md
+          if gh release view v2.0.1 >/dev/null 2>&1; then
+            gh release upload v2.0.1 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip" --clobber
+            gh release edit v2.0.1 \
+              --title "Stremio Auto v2.0.1" --notes-file dist/release-notes.md
           else
-            gh release create v2.0.0 \
-              "dist/StremGen5W-v2.0.0-USB-Installer.zip" \
-              --title "StremGen5W v2.0.0" \
+            gh release create v2.0.1 \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip" \
+              "dist/Stremio-gen5-hmg-nemesis-v2.0.1-Source.zip" \
+              --title "Stremio Auto v2.0.1" \
               --notes-file dist/release-notes.md \
               --target "${GITHUB_SHA}"
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: StremGen5W-build-${{ github.run_number }}
+          name: StremioAuto-build-${{ github.run_number }}
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             dist/*.zip

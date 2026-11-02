@@ -1,32 +1,46 @@
-# StremGen5W
+# Stremio Auto
 
-StremGen5W is a community-built Android media client for compatible Hyundai Motor Group Gen5 head units with NEMESIS installed. It provides a Stremio account sign-in, synced library and add-on catalog support, and a custom media player.
+**An unofficial, independent side project for Hyundai Motor Group Gen5 head units with NEMESIS (Android 4.4).**
 
-**Public release:** v2.0.0
+Stremio Auto is a hobby project created to get a usable Stremio-style client running on older HMG head units. It started with extensive ChatGPT-assisted experimentation rather than professional Android development. It is **not an official Stremio app** and is **not affiliated with, sponsored by, or endorsed by Stremio**, Hyundai, Kia, or NEMESIS.
 
-## Features
-- Sign in to your own Stremio account to sync your library, Continue Watching, and installed add-ons.
-- Browse movie, series, and compatible add-on catalogs.
-- Play supported streams with audio/subtitle track selection, playback controls, video resizing, and video-only picture brightness adjustment.
-- Android 4.4 (API 19) ARMv7 build with FFmpeg audio support and modern TLS support for compatible servers.
-- NEMESIS USB installer, APK, and buildable source code.
+This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-## Install
-The release includes a NEMESIS USB ZIP. Extract its contents to the USB drive root, then run the installer from NEMESIS. The installer can perform a clean reinstall of the app package and validates the Android package version after installation.
+**Current release:** v2.0.1 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
-A clean reinstall clears locally stored login information and caches. Every user signs in with their own account. The APK contains **no preconfigured user, email address, credentials, Stremio authorization token, or personal library data**.
+## What it can do
 
-## Build
-GitHub Actions builds the APK using Java 17, the Android SDK, an ARMv7 FFmpeg audio library, and Gradle. It generates NEMESIS installer and source ZIP artifacts. See `.github/workflows/build.yml` and `tools/package_nemesis.py`.
+- Sign in to your own Stremio account and access compatible library, Continue Watching, add-on, movie, and series content.
+- Play supported video sources inside the app with ExoPlayer, audio/subtitle options, controls, and resizing.
+- Use bundled FFmpeg audio codec support on Android 4.4 (API 19, ARMv7).
+- Open VLC as an optional fallback if it is installed and the built-in player cannot handle a source.
+- Install using a NEMESIS USB ZIP and build from the included Android source.
+
+Functionality depends on stream formats, third-party add-ons, network conditions, and the head unit's firmware. Not every feature from the official Stremio applications is implemented.
+
+## Installation
+
+Download **Stremio-gen5-hmg-nemesis-v2.0.1-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+
+The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
+
+The Android application ID and NEMESIS internal package ID intentionally stay the same as the earlier StremGen5W versions. They are internal compatibility identifiers, not the name displayed in the car, and allow existing installations to be replaced rather than duplicated.
+
+## Building from source
+
+GitHub Actions builds using Java 17, the Android SDK, Gradle, and FFmpeg for Android 4.4 ARMv7. See `.github/workflows/build.yml` and `tools/package_nemesis.py`.
+
+No account email, login token, personal library, or other user-specific credentials are bundled in the distributed app.
 
 ## Compatibility and limitations
-- Developed for compatible Android 4.4 based head units. Other devices have not been validated.
-- Add-on endpoints are third-party services and may have TLS, network, or availability restrictions.
-- Android network routing **has not been verified to be phone-only**. Wireless CarPlay by itself does not establish that app traffic uses phone data rather than the vehicle's connection. Check data usage and network policies before streaming.
-- Use responsibly. Do not watch or operate video while driving.
 
-## Notices
-StremGen5W is an independent community project. It is **not affiliated with or endorsed by** Stremio, Hyundai, Kia, or NEMESIS. The official Stremio icon is used as identifying artwork and belongs to its trademark owner; follow the relevant trademark rules before redistribution. FFmpeg notices and licensing materials are included under `app/src/main/assets`.
+- Intended for compatible Android 4.4 Hyundai Motor Group Gen5 head units running NEMESIS; compatibility with other head units is not established.
+- Third-party add-ons or streaming endpoints may be unavailable or incompatible.
+- Phone-only data routing has not been independently confirmed. Wireless CarPlay alone does not establish that the app uses a phone's data connection.
+- **Use responsibly. Do not watch or operate video while driving.**
 
-## Privacy
-This source release includes no Git commit history or device-generated account data. Do not commit local Android caches, API keys, signing keys, screenshots containing personal information, or debug logs to a public repository. Users are responsible for their own media sources and lawful content access.
+## Attribution and notices
+
+This community project is **completely unofficial**. Stremio and its name/logo are owned by their respective rights holders. The official Stremio launcher icon is used as identifying artwork, not as a claim of affiliation; see `branding/README.md`. FFmpeg licensing notices are included in `app/src/main/assets`.
+
+Please contribute improvements, bug reports, and pull requests. This project exists because the author wanted a working client on an older Android head unit and hopes other people can make it better.

@@ -77,4 +77,4 @@ for lib in avcodec avutil swresample; do
       exit 1
     }
 done
-echo "FFmpeg audio decoders built for Gen5W ARMv7: ${DECODERS[*]}"
+echo "Stremio Auto FFmpeg audio decoders built for ARMv7: ${DECODERS[*]}"

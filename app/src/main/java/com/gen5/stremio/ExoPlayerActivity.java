@@ -50,7 +50,7 @@ import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * Gen5W in-app player, Android API 19.
+ * Stremio Auto in-app player, Android API 19.
  *
  * Tap video to toggle a full seekable playback overlay. It auto-hides during
  * playback. System Back, edge swipe and Back to Sources return immediately.
@@ -295,7 +295,7 @@ public class ExoPlayerActivity extends Activity {
     if(!getIntent().getBooleanExtra("parked_confirmed",false)){finish();return;}
     streamUrl=getIntent().getStringExtra("stream_url");
     videoTitle=getIntent().getStringExtra("stream_title");
-    if(videoTitle==null)videoTitle="StremGen5W";
+    if(videoTitle==null)videoTitle="Stremio Auto";
     if(streamUrl==null||(!streamUrl.startsWith("https://")&&!streamUrl.startsWith("http://"))){finish();return;}
     motionFeatureEnabled=getSharedPreferences("account",0).getBoolean("motion_lockout",false);
     motionLocked=motionFeatureEnabled;
@@ -347,7 +347,7 @@ public class ExoPlayerActivity extends Activity {
     title.setPadding(dp(18),0,dp(10),0);
     title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);
     topPanel.addView(title,new LinearLayout.LayoutParams(0,dp(45),1));
-    TextView label=small("STREMGEN5W  •  PLAYER");
+    TextView label=small("STREMIO AUTO  •  PLAYER");
     label.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
     topPanel.addView(label,new LinearLayout.LayoutParams(dp(165),dp(45)));
     root.addView(topPanel,new FrameLayout.LayoutParams(-1,dp(78),Gravity.TOP));
@@ -485,7 +485,7 @@ public class ExoPlayerActivity extends Activity {
       originalTls=HttpsURLConnection.getDefaultSSLSocketFactory();
       HttpsURLConnection.setDefaultSSLSocketFactory(VideoTls.build(this));
       DefaultDataSourceFactory data=new DefaultDataSourceFactory(
-        this,Util.getUserAgent(this,"StremGen5W"));
+        this,Util.getUserAgent(this,"StremioAuto"));
       Uri uri=Uri.parse(streamUrl);
       String file=uri.getPath();
       String path=file==null?"":file.toLowerCase(Locale.US);
@@ -537,7 +537,7 @@ public class ExoPlayerActivity extends Activity {
   private void playerNotice(String heading,String message){
     final Dialog modal=new Dialog(this);
     modal.requestWindowFeature(Window.FEATURE_NO_TITLE);
-    LinearLayout body=dialogShell(heading,"STREMGEN5W  •  PLAYBACK");
+    LinearLayout body=dialogShell(heading,"STREMIO AUTO  •  PLAYBACK");
     TextView note=text(message,15);
     note.setTextColor(MUTED);note.setPadding(dp(14),dp(12),dp(14),dp(17));
     body.addView(note);

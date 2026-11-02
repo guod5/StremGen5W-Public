@@ -331,7 +331,7 @@ public class MainActivity extends Activity {
       prefs.edit().putString("last_page",next).apply();
     root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(bg);
     LinearLayout header=new LinearLayout(this);header.setOrientation(0);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(12),dp(6),dp(12),dp(6));
-    TextView brand=text("STREM  /  GEN5W",19);brand.setTextColor(accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,dp(52),1));
+    TextView brand=text("STREMIO AUTO",19);brand.setTextColor(accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,dp(52),1));
     TextView current=text("v"+shortBuild()+"  •  "+page.toUpperCase(java.util.Locale.US),13);current.setTextColor(accent);header.addView(current);
     root.addView(header);
     LinearLayout nav=new LinearLayout(this);nav.setOrientation(0);nav.setPadding(dp(9),dp(2),dp(9),dp(8));
@@ -1174,7 +1174,7 @@ public class MainActivity extends Activity {
   }
   void loadLibrary(){
     if(auth.isEmpty()){add(text("Sign in to load your Stremio account library.",18));return;}
-    add(text("STREMIO / GEN5W • Library",24));
+    add(text("STREMIO AUTO • Library",24));
     add(text("Account: "+(verifiedAccountEmail.isEmpty()?"verification pending":verifiedAccountEmail),15));
     add(text("Library source: "+lastLibrarySource,14));
     add(btn("Refresh library from Stremio",new Runnable(){public void run(){refreshLibrary(true);}}));
@@ -1513,7 +1513,7 @@ public class MainActivity extends Activity {
     sourceRequests=0;
     TextView heading=text(selectedName.isEmpty()?selectedId:selectedName,21);
     heading.setTypeface(null,1);heading.setPadding(dp(8),dp(1),dp(8),dp(2));add(heading);
-    TextView tip=text("720p H.264 recommended • Watch plays inside StremGen5W • one Back returns here • VLC fallback for unsupported streams.",13);
+    TextView tip=text("720p H.264 recommended • Watch plays inside Stremio Auto • one Back returns here • VLC fallback for unsupported streams.",13);
     tip.setPadding(dp(8),dp(1),dp(8),dp(5));add(tip);
     LinearLayout controls=new LinearLayout(this);controls.setOrientation(0);
     for(final String choice:new String[]{"All","720p","1080p","Other"}){
