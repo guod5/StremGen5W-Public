@@ -80,6 +80,10 @@ public class ExoPlayerActivity extends Activity {
   private SeekBar seek;
   private int aspect=0;
   private boolean userPaused=false,autoplayStarted=false;
+  private boolean motionFeatureEnabled=false,motionLocked=false;
+  private MotionGuard motionGuard;
+  private Dialog motionDialog;
+  private TextView motionDialogText;
   private float savedWindowBrightness=WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
   private boolean trackMessageShown=false;
   private float fingerX,fingerY;
@@ -293,6 +297,13 @@ public class ExoPlayerActivity extends Activity {
     videoTitle=getIntent().getStringExtra("stream_title");
     if(videoTitle==null)videoTitle="StremGen5W";
     if(streamUrl==null||(!streamUrl.startsWith("https://")&&!streamUrl.startsWith("http://"))){finish();return;}
+    motionFeatureEnabled=getSharedPreferences("account",0).getBoolean("motion_lockout",false);
+    motionLocked=motionFeatureEnabled;
+    if(motionFeatureEnabled)motionGuard=new MotionGuard(this,new MotionGuard.Listener(){
+      public void onMotionStateChanged(boolean locked,String reason){
+        handleMotionState(locked,reason);
+      }
+    });
     audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
     if(audioManager!=null){
       int focus=audioManager.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
@@ -348,6 +359,7 @@ public class ExoPlayerActivity extends Activity {
     rewind.setContentDescription("Rewind 10 seconds");
     spaced(transportPanel,rewind,62,62,12);
     pauseButton=roundControl("Ⅱ",76,true,new View.OnClickListener(){public void onClick(View v){
+      if(motionLocked){showMotionDialog("Motion lockout is active.");return;}
       if(player==null)return;
       userPaused=player.getPlayWhenReady();
       player.setPlayWhenReady(!userPaused);
@@ -452,7 +464,7 @@ public class ExoPlayerActivity extends Activity {
         @Override public void onPlayerStateChanged(boolean ready,int state){
           if(released)return;
           if(state==Player.STATE_READY){
-            if(!autoplayStarted&&!userPaused){autoplayStarted=true;player.setPlayWhenReady(true);}
+            if(!motionLocked&&!autoplayStarted&&!userPaused){autoplayStarted=true;player.setPlayWhenReady(true);}
             if(firstFrame)clearStatus();
             scheduleHide();
           }else if(state==Player.STATE_BUFFERING && !firstFrame)status("Buffering video…");
@@ -481,7 +493,9 @@ public class ExoPlayerActivity extends Activity {
       if(path.endsWith(".m3u8"))media=new HlsMediaSource.Factory(data).createMediaSource(uri);
       else if(path.endsWith(".mpd"))media=new DashMediaSource.Factory(data).createMediaSource(uri);
       else media=new ProgressiveMediaSource.Factory(data).createMediaSource(uri);
-      player.setPlayWhenReady(true);
+      // Do not start the built-in player before an enabled motion check passes.
+      if(motionLocked){userPaused=true;autoplayStarted=true;}
+      player.setPlayWhenReady(!motionLocked);
       player.prepare(media);
       handler.postDelayed(progressRunnable,500);
       showControls(true);
@@ -758,8 +772,60 @@ public class ExoPlayerActivity extends Activity {
     }
   }
 
+  private void handleMotionState(boolean locked,String reason){
+    if(released)return;
+    boolean wasLocked=motionLocked;
+    motionLocked=locked;
+    if(locked){
+      // Pause immediately. GPS becoming stationary never automatically resumes video.
+      userPaused=true;autoplayStarted=true;
+      if(player!=null)player.setPlayWhenReady(false);
+      showControls(true);
+      showMotionDialog(reason);
+    }else{
+      if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
+      if(wasLocked){
+        status("GPS reports stationary. Tap Play to resume.");
+        showControls(true);
+      }
+    }
+  }
+
+  private void showMotionDialog(String reason){
+    if(!motionFeatureEnabled||!motionLocked||released||isFinishing())return;
+    if(motionDialog!=null&&motionDialog.isShowing()){
+      if(motionDialogText!=null)motionDialogText.setText(reason);
+      return;
+    }
+    final Dialog dialog=new Dialog(this);
+    motionDialog=dialog;
+    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+    dialog.setCancelable(false);
+    dialog.setCanceledOnTouchOutside(false);
+    LinearLayout panel=dialogShell("MOVEMENT LOCKOUT","GPS PROTECTION");
+    TextView copy=text(reason,16);
+    copy.setPadding(dp(14),dp(6),dp(14),dp(12));
+    motionDialogText=copy;panel.addView(copy);
+    TextView instructions=text("Playback remains paused until GPS indicates stationary. After unlock, tap Play to resume.",14);
+    instructions.setTextColor(MUTED);instructions.setPadding(dp(14),dp(2),dp(14),dp(14));
+    panel.addView(instructions);
+    Button back=tool("Back to Sources",new View.OnClickListener(){
+      public void onClick(View view){
+        if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
+        exit(null);
+      }
+    });
+    LinearLayout.LayoutParams buttonParams=new LinearLayout.LayoutParams(-1,dp(49));
+    buttonParams.setMargins(dp(9),dp(3),dp(9),dp(11));
+    panel.addView(back,buttonParams);
+    dialog.setContentView(panel);
+    presentModal(dialog);
+  }
+
   private void exit(String fallback){
     if(released)return;
+    if(motionGuard!=null)motionGuard.stop();
+    if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
     released=true;handler.removeCallbacks(hideRunnable);handler.removeCallbacks(progressRunnable);
     try{
       if(player!=null){
@@ -791,13 +857,20 @@ public class ExoPlayerActivity extends Activity {
     }
     return super.dispatchTouchEvent(event);
   }
+  @Override protected void onResume(){
+    super.onResume();
+    if(motionGuard!=null&&!released)motionGuard.start();
+  }
   @Override protected void onPause(){
+    if(motionGuard!=null)motionGuard.stop();
     super.onPause();
     if(player!=null&&!released){
       player.setPlayWhenReady(false);showControls(true);
     }
   }
   @Override protected void onDestroy(){
+    if(motionGuard!=null){motionGuard.stop();motionGuard=null;}
+    if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
     restoreBrightness();
     handler.removeCallbacks(hideRunnable);handler.removeCallbacks(progressRunnable);
     if(!released&&player!=null)try{player.release();}catch(Throwable ignored){}

@@ -45,10 +45,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v1.0.1 source without Git history
+      - name: Export clean v1.0.2 source without Git history
         run: |
-          git archive --format=zip --output=dist/StremGen5W-v1.0.1-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/StremGen5W-v1.0.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/StremGen5W-v1.0.2-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/StremGen5W-v1.0.2-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -59,16 +59,16 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-gen5w-nemesis-usb.zip")
-          dst = pathlib.Path("dist/StremGen5W-v1.0.1-USB-Installer.zip")
+          dst = pathlib.Path("dist/StremGen5W-v1.0.2-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio.zip"}
-              assert "version=1.0.1" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=2" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=1.0.2" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=3" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
-              assert "version=1.0.1" in z.read("NEMESIS.data").decode("utf-8")
+              assert "version=1.0.2" in z.read("NEMESIS.data").decode("utf-8")
               apk = z.read("app/StremioGen5W.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
               assert z.testzip() is None
@@ -79,50 +79,55 @@ jobs:
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
+              for phrase in [b"Motion lockout", b"Disable popup", b"Exit Stremio", b"motion_lockout", b"disable_popup", b"2 mph", b"Yes, Exit"]:
+                  assert phrase in dex, f"New settings / exit feature missing from APK: {phrase!r}"
+
 
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/StremGen5W-v1.0.1-USB-Installer.zip
-      - name: Publish official v1.0.1 GitHub Release
+          sha256sum dist/StremGen5W-v1.0.2-USB-Installer.zip
+      - name: Publish official v1.0.2 GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           cat > dist/release-notes.md <<'NOTES'
-          ## StremGen5W v1.0.1 — Parked-use confirmation
+          ## StremGen5W v1.0.2 — Settings and Exit button
 
-          This update adds a required, non-dismissable parked-use acknowledgement on each fresh app launch. It is a user confirmation, not automatic Park gear detection. Tap 'I'm Parked - Continue' to unlock normal browsing and video playback, or Exit App to close without approving.
+          This release adds a Settings screen with two saved switches: Motion lockout (OFF by default, 2 mph GPS speed threshold) and Disable popup (OFF by default). The parking reminder is shown only once per app launch when enabled. There is also a new Exit Stremio button on Home with Yes/No confirmation that closes the app process and stops its own background work.
 
           ### Download and installation
 
-          Download **StremGen5W-v1.0.1-USB-Installer.zip** from **Assets** below. Extract its contents to the root of a USB drive, then run the NEMESIS installer on a compatible Gen5 Android head unit.
+          Download **StremGen5W-v1.0.2-USB-Installer.zip** from **Assets** below. Extract its contents to the root of a USB drive, then run the NEMESIS installer on a compatible Gen5 Android head unit.
 
           The installer performs a clean reinstall of the Stremio Gen5W app and can clear local login information and caches. Sign in with your own Stremio account after installation.
 
           ### Included
 
-          - New: 'PARKED VEHICLE REQUIRED' confirmation, with Exit App or I'm Parked - Continue\n          - The original full-color Stremio launcher icon
+          - Optional GPS motion soft lock, default OFF, threshold 2 mph
+          - Saved popup preference and Home Exit Stremio action
+          - The original full-color Stremio launcher icon
           - Stremio account sign-in, synced library, Continue Watching, and add-on catalogs
           - Player controls, audio/subtitle track selection, and bundled FFmpeg audio codecs
           - Modern TLS support for compatible Android 4.4 servers
 
           ### Compatibility and safety
 
-          This is an independent community project, not affiliated with Stremio or Hyundai. The dialog relies on user confirmation and does not sense the actual Park gear state. Third-party stream services may fail. Phone-only data routing has not been confirmed. Use video playback only while parked.
+          This is an independent community project, not affiliated with Stremio or Hyundai. GPS movement detection must be tested on the target head unit and can be inaccurate or unavailable. The optional soft lock uses a GPS speed threshold rather than an assured safety interlock. Third-party stream services may fail. Phone-only data routing has not been confirmed. Never use video while driving.
 
           **Installation may remove existing StremGen5W app data.** This is a test release for compatible head units and not a guarantee of hardware compatibility.
           NOTES
-          if gh release view v1.0.1 >/dev/null 2>&1; then
-            gh release upload v1.0.1 \
-              "dist/StremGen5W-v1.0.1-USB-Installer.zip" --clobber
-            gh release edit v1.0.1 \
-              --title "StremGen5W v1.0.1" --notes-file dist/release-notes.md
+          if gh release view v1.0.2 >/dev/null 2>&1; then
+            gh release upload v1.0.2 \
+              "dist/StremGen5W-v1.0.2-USB-Installer.zip" --clobber
+            gh release edit v1.0.2 \
+              --title "StremGen5W v1.0.2" --notes-file dist/release-notes.md
           else
-            gh release create v1.0.1 \
-              "dist/StremGen5W-v1.0.1-USB-Installer.zip" \
-              --title "StremGen5W v1.0.1" \
+            gh release create v1.0.2 \
+              "dist/StremGen5W-v1.0.2-USB-Installer.zip" \
+              --title "StremGen5W v1.0.2" \
               --notes-file dist/release-notes.md \
               --target "${GITHUB_SHA}"
           fi

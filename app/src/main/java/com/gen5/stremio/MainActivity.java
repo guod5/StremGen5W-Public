@@ -29,10 +29,14 @@ public class MainActivity extends Activity {
   LinearLayout root,body; String page="Home",auth="",selectedId="",selectedType="movie";
   ArrayList<String> history=new ArrayList<String>(); JSONArray addons=new JSONArray(); JSONArray libraryItems=new JSONArray(); boolean returningFromPlayer=false; int generation=0; ArrayList<String> errors=new ArrayList<String>(); boolean routeVerified=false; String selectedName=""; final String CINEMETA="https://v3-cinemeta.strem.io/";
   float sx,sy; android.content.SharedPreferences prefs;
-  // This is deliberately a per-launch user acknowledgement, not a vehicle Park sensor.
-  // Never persist approval: each new launch must ask the user again.
-  boolean parkedConfirmed=false;
-  Dialog parkedDialog;
+  // Persistent preferences: motion lockout defaults OFF; reminder defaults ON.
+  // The acknowledgement is remembered only until the app is explicitly closed.
+  boolean parkedConfirmed=false,warningShown=false,mainResumed=false,closingApp=false;
+  boolean motionLocked=false;
+  String motionReason="Motion lockout is off.";
+  Dialog parkedDialog,motionDialog;
+  TextView motionDialogText,motionStatusText;
+  MotionGuard motionGuard;
   final java.util.HashMap<String,String> artworkCache=new java.util.HashMap<String,String>();
   int posterLoaded=0,posterFailed=0,posterMissing=0; String lastPosterError="";
   String verifiedAccountEmail=""; boolean accountIdentityLoading=false;
@@ -99,6 +103,7 @@ public class MainActivity extends Activity {
   }
   int dp(int x){return (int)(x*getResources().getDisplayMetrics().density+.5f);}
   public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("account",0);
+    parkedConfirmed=prefs.getBoolean("disable_popup",false);
     auth=prefs.getString("auth","");verifiedAccountEmail=prefs.getString("verified_account_email","");
     restoreAccountCache();
     selectedId=b==null?prefs.getString("selected_id",""):b.getString("selected_id",prefs.getString("selected_id",""));
@@ -112,7 +117,10 @@ public class MainActivity extends Activity {
     showParkedConfirmation();
   }
   void showParkedConfirmation(){
-    if(parkedConfirmed||isFinishing()||(parkedDialog!=null&&parkedDialog.isShowing()))return;
+    if(prefs!=null&&prefs.getBoolean("disable_popup",false)){parkedConfirmed=true;return;}
+    if(parkedConfirmed||warningShown||closingApp||isFinishing()||
+      (parkedDialog!=null&&parkedDialog.isShowing()))return;
+    warningShown=true;
     final Dialog dialog=new Dialog(this);
     parkedDialog=dialog;
     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -135,7 +143,7 @@ public class MainActivity extends Activity {
     actions.setOrientation(0);
     Button exit=btn("Exit App",new Runnable(){public void run(){dialog.dismiss();parkedDialog=null;finish();}});
     Button confirm=btn("I'm Parked - Continue",new Runnable(){public void run(){
-      parkedConfirmed=true;dialog.dismiss();parkedDialog=null;
+      parkedConfirmed=true;dialog.dismiss();parkedDialog=null;refreshMotionDialog();
     }});
     exit.setTextSize(15);confirm.setTextSize(15);
     confirm.setBackgroundDrawable(shape(accent,12));
@@ -327,8 +335,8 @@ public class MainActivity extends Activity {
     TextView current=text("v"+shortBuild()+"  •  "+page.toUpperCase(java.util.Locale.US),13);current.setTextColor(accent);header.addView(current);
     root.addView(header);
     LinearLayout nav=new LinearLayout(this);nav.setOrientation(0);nav.setPadding(dp(9),dp(2),dp(9),dp(8));
-    String[] names={"‹ Back","Home","Library","Search","Add-ons","Account","Info"};
-    final String[] pages={"Back","Home","Library","Search","Add-ons","Account","Diagnostics"};
+    String[] names={"‹ Back","Home","Library","Search","Add-ons","Account","Info","Settings"};
+    final String[] pages={"Back","Home","Library","Search","Add-ons","Account","Diagnostics","Settings"};
     for(int i=0;i<names.length;i++){
       final String target=pages[i];Button tab=btn(names[i],new Runnable(){public void run(){if(target.equals("Back"))back();else render(target,true);}});
       tab.setTextSize(13);tab.setPadding(dp(2),dp(3),dp(2),dp(3));
@@ -340,9 +348,18 @@ public class MainActivity extends Activity {
     body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(10),dp(4),dp(10),dp(16));sc.addView(body);
     root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
     if(page.equals("Home")){home();}
-    else if(page.equals("Account"))account();else if(page.equals("Add-ons"))showAddons();else if(page.equals("Library"))loadLibrary();else if(page.equals("Discover")||page.equals("Search"))discover();else if(page.equals("Diagnostics"))diagnostics();else if(page.equals("Streams"))loadStreams();
+    else if(page.equals("Account"))account();else if(page.equals("Add-ons"))showAddons();else if(page.equals("Library"))loadLibrary();else if(page.equals("Discover")||page.equals("Search"))discover();else if(page.equals("Diagnostics"))diagnostics();else if(page.equals("Settings"))settings();else if(page.equals("Streams"))loadStreams();
+    refreshMotionDialog();
   }
   void home(){
+    LinearLayout actions=new LinearLayout(this);actions.setOrientation(0);
+    actions.setGravity(Gravity.CENTER_VERTICAL);
+    TextView heading=text("Your Stremio",20);heading.setTypeface(null,1);
+    actions.addView(heading,new LinearLayout.LayoutParams(0,dp(56),1));
+    Button exit=btn("Exit Stremio",new Runnable(){public void run(){confirmExitStremio();}});
+    exit.setTextSize(15);exit.setBackgroundDrawable(shape(surface,12));
+    actions.addView(exit,new LinearLayout.LayoutParams(dp(175),dp(52)));
+    add(actions);
     // Home starts immediately with personal content. Search, Library, and
     // Add-ons already have permanent navigation buttons in the top bar.
     showContinueWatching();
@@ -388,6 +405,146 @@ public class MainActivity extends Activity {
     if(unavailable>0)add(text(unavailable+" add-on manifests have not loaded. Refresh Add-ons to retry.",14));
     if(shown==0)add(text("No add-on catalogs available. Open Add-ons and refresh.",14));
   }
+  // Settings are intentionally stored independently from account credentials.
+  // A NEMESIS clean reinstall still clears app data, including these choices.
+  void settings(){
+    TextView heading=text("Settings",23);heading.setTypeface(null,1);add(heading);
+    add(text("Choose how Stremio behaves on this head unit.",15));
+
+    final Switch motion=new Switch(this);
+    motion.setText("Motion lockout");
+    motion.setTextColor(Color.WHITE);motion.setTextSize(19);
+    motion.setPadding(dp(14),dp(12),dp(12),dp(12));
+    motion.setMinHeight(dp(63));
+    motion.setChecked(prefs.getBoolean("motion_lockout",false));
+    add(motion);
+    add(text("Off by default. When enabled, GPS movement at 2 mph or above pauses in-app playback. A stable GPS fix is required; playback stays paused if the GPS signal is unavailable. This does not control VLC.",14));
+    motionStatusText=text(motion.isChecked()?motionReason:"Motion lockout is off.",14);
+    motionStatusText.setTextColor(accent);add(motionStatusText);
+    motion.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+      public void onCheckedChanged(CompoundButton button,boolean enabled){
+        prefs.edit().putBoolean("motion_lockout",enabled).apply();
+        updateMotionMonitoring();
+        if(motionStatusText!=null)motionStatusText.setText(enabled?motionReason:"Motion lockout is off.");
+      }
+    });
+
+    View divider=new View(this);divider.setBackgroundColor(0xff323c49);
+    LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(1));
+    line.setMargins(dp(13),dp(16),dp(13),dp(12));body.addView(divider,line);
+
+    final Switch popup=new Switch(this);
+    popup.setText("Disable popup");
+    popup.setTextColor(Color.WHITE);popup.setTextSize(19);
+    popup.setPadding(dp(14),dp(12),dp(12),dp(12));
+    popup.setMinHeight(dp(63));
+    popup.setChecked(prefs.getBoolean("disable_popup",false));
+    add(popup);
+    add(text("Hide the one-time parked-use reminder when launching Stremio. This preference will be saved.",14));
+    popup.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+      public void onCheckedChanged(CompoundButton button,boolean disabled){
+        prefs.edit().putBoolean("disable_popup",disabled).apply();
+        if(disabled){
+          parkedConfirmed=true;
+          if(parkedDialog!=null){parkedDialog.dismiss();parkedDialog=null;}
+          refreshMotionDialog();
+        }else if(!warningShown){
+          parkedConfirmed=false;
+          showParkedConfirmation();
+        }
+      }
+    });
+  }
+
+  void updateMotionMonitoring(){
+    boolean enabled=prefs!=null&&prefs.getBoolean("motion_lockout",false);
+    if(enabled&&mainResumed&&!closingApp){
+      if(motionGuard==null)motionGuard=new MotionGuard(this,new MotionGuard.Listener(){
+        public void onMotionStateChanged(boolean locked,String reason){
+          motionLocked=locked;
+          motionReason=reason;
+          if(motionStatusText!=null&&"Settings".equals(page))motionStatusText.setText(reason);
+          refreshMotionDialog();
+        }
+      });
+      motionLocked=true;
+      motionReason="Waiting for GPS...";
+      motionGuard.start();
+    }else{
+      if(motionGuard!=null)motionGuard.stop();
+      motionLocked=false;
+      motionReason="Motion lockout is off.";
+      if(motionStatusText!=null&&"Settings".equals(page))motionStatusText.setText(motionReason);
+    }
+    refreshMotionDialog();
+  }
+
+  void refreshMotionDialog(){
+    boolean show=prefs!=null&&prefs.getBoolean("motion_lockout",false)&&
+      motionLocked&&parkedConfirmed&&mainResumed&&!closingApp&&!isFinishing()&&
+      !"Settings".equals(page);
+    if(!show){
+      if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
+      return;
+    }
+    if(motionDialog!=null&&motionDialog.isShowing()){
+      if(motionDialogText!=null)motionDialogText.setText(motionReason);
+      return;
+    }
+    final Dialog dialog=new Dialog(this);
+    motionDialog=dialog;dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+    dialog.setCancelable(false);dialog.setCanceledOnTouchOutside(false);
+    LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);
+    panel.setPadding(dp(19),dp(15),dp(19),dp(16));
+    panel.setBackgroundDrawable(shape(surface,17));
+    TextView title=text("MOVEMENT LOCKOUT",21);title.setTextColor(accent);
+    title.setTypeface(null,1);panel.addView(title);
+    TextView details=text(motionReason,16);details.setTextColor(Color.WHITE);
+    motionDialogText=details;panel.addView(details);
+    TextView footer=text("Video is paused while motion is detected. Playback can resume after GPS reports stationary.",14);
+    panel.addView(footer);
+    Button openSettings=btn("Settings",new Runnable(){public void run(){
+      if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
+      render("Settings",true);
+    }});
+    openSettings.setBackgroundDrawable(shape(accent,12));openSettings.setTextColor(0xff071312);
+    panel.addView(openSettings,new LinearLayout.LayoutParams(-1,dp(52)));
+    dialog.setContentView(panel);dialog.show();
+    Window window=dialog.getWindow();
+    if(window!=null){
+      window.setLayout(Math.min(getResources().getDisplayMetrics().widthPixels-dp(26),dp(690)),
+        WindowManager.LayoutParams.WRAP_CONTENT);
+      window.setGravity(Gravity.CENTER);
+      window.getDecorView().setSystemUiVisibility(
+        View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    }
+  }
+
+  void confirmExitStremio(){
+    new AlertDialog.Builder(this)
+      .setTitle("Exit Stremio?")
+      .setMessage("Close Stremio completely and stop its background activity? Your login and settings will be saved.")
+      .setNegativeButton("No",null)
+      .setPositiveButton("Yes, Exit",new DialogInterface.OnClickListener(){
+        public void onClick(DialogInterface dialog,int which){exitStremioCompletely();}
+      }).show();
+  }
+
+  void exitStremioCompletely(){
+    if(closingApp)return;
+    closingApp=true;
+    if(motionGuard!=null)motionGuard.stop();
+    if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;}
+    if(parkedDialog!=null){parkedDialog.dismiss();parkedDialog=null;}
+    refreshHandler.removeCallbacks(homeRefresh);
+    apiWorkers.shutdownNow();catalogWorkers.shutdownNow();
+    sportsWorkers.shutdownNow();imageWorkers.shutdownNow();
+    // This shuts down the app process, not merely this screen. It does not
+    // terminate a separate VLC process launched by the user.
+    try{finishAffinity();}catch(Throwable ignored){finish();}
+    android.os.Process.killProcess(android.os.Process.myPid());
+  }
+
   String enc(String v)throws Exception{return java.net.URLEncoder.encode(v,"UTF-8").replace("+","%20");}
   void showCatalog(String title,String url,String type){
     final LinearLayout section=new LinearLayout(this);section.setOrientation(1);add(section);
@@ -1427,6 +1584,7 @@ public class MainActivity extends Activity {
   }
   void openInAppPlayer(final String url){
     if(!parkedConfirmed){showParkedConfirmation();return;}
+    if(prefs.getBoolean("motion_lockout",false)&&motionLocked){refreshMotionDialog();return;}
     if(url==null||(!url.startsWith("http://")&&!url.startsWith("https://"))){
       message("This source does not provide a direct video URL.");return;
     }
@@ -1508,7 +1666,9 @@ public class MainActivity extends Activity {
   }
   @Override protected void onResume(){
     super.onResume();
+    mainResumed=true;
     immersiveWindow();
+    updateMotionMonitoring();
     if(returningFromPlayer){
       finishVideoMeasurement();returningFromPlayer=false;
       prefs.edit().putBoolean("external_playback",false).putString("last_page","Streams").apply();
@@ -1518,7 +1678,14 @@ public class MainActivity extends Activity {
       refreshLibrary(false);refreshAddons(false);
     }
   }
+  @Override protected void onPause(){
+    mainResumed=false;
+    if(motionGuard!=null)motionGuard.stop();
+    super.onPause();
+  }
   @Override protected void onDestroy(){
+    if(motionGuard!=null){motionGuard.stop();motionGuard=null;}
+    if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;}
     if(parkedDialog!=null){parkedDialog.dismiss();parkedDialog=null;}
     refreshHandler.removeCallbacks(homeRefresh);
     apiWorkers.shutdownNow();catalogWorkers.shutdownNow();sportsWorkers.shutdownNow();imageWorkers.shutdownNow();
