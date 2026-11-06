@@ -455,6 +455,38 @@ public class MainActivity extends Activity {
       }
     });
 
+    View modemDivider=new View(this);modemDivider.setBackgroundColor(0xff323c49);
+    LinearLayout.LayoutParams modemLine=new LinearLayout.LayoutParams(-1,dp(1));
+    modemLine.setMargins(dp(13),dp(16),dp(13),dp(12));
+    body.addView(modemDivider,modemLine);
+
+    final android.content.SharedPreferences networkPrefs=getSharedPreferences("network",0);
+    final Switch modemSwitch=new Switch(this);
+    modemSwitch.setText("Use Internal Modem");
+    modemSwitch.setTextColor(Color.WHITE);modemSwitch.setTextSize(19);
+    modemSwitch.setPadding(dp(14),dp(12),dp(12),dp(12));
+    modemSwitch.setMinHeight(dp(63));
+    modemSwitch.setChecked(networkPrefs.getBoolean("use_internal_modem",false));
+    add(modemSwitch);
+    add(text("The car's built-in data connection. Usage may be monitored by HMG.",14));
+    add(text("OFF (default): Wi-Fi and Bluetooth/USB hotspots only. ON: allow Android to use the car's internal modem, as before the firewall update. The NEMESIS service applies changes within a few seconds; it must be running.",14));
+    final boolean[] modemReverting={false};
+    modemSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+      public void onCheckedChanged(CompoundButton button,boolean enabled){
+        if(modemReverting[0])return;
+        if(!networkPrefs.edit().putBoolean("use_internal_modem",enabled).commit()){
+          modemReverting[0]=true;
+          modemSwitch.setChecked(!enabled);
+          modemReverting[0]=false;
+          message("Could not save the modem preference. No change requested.");
+          return;
+        }
+        message(enabled?
+          "Internal modem access requested; NEMESIS will remove Stremio's firewall.":
+          "Wi-Fi/hotspot-only mode requested; NEMESIS will restore Stremio's firewall.");
+      }
+    });
+
     View vlcDivider=new View(this);vlcDivider.setBackgroundColor(0xff323c49);
     LinearLayout.LayoutParams vlcLine=new LinearLayout.LayoutParams(-1,dp(1));
     vlcLine.setMargins(dp(13),dp(16),dp(13),dp(12));body.addView(vlcDivider,vlcLine);
@@ -488,8 +520,8 @@ public class MainActivity extends Activity {
         prefs.edit().putBoolean("vlc_integration",enabled).apply();
       }
     });
-    add(text("NETWORK: WI-FI AND HOTSPOT ONLY",17));
-    add(text("A NEMESIS service blocks this app's modem and internal Ethernet traffic while its firewall rules are active. Check NEMESIS Services for stremiogen5w/netguard. Android system DNS and VLC are outside this app-only protection.",14));
+    add(text("NETWORK FIREWALL",17));
+    add(text("Use Internal Modem OFF activates Stremio's Wi-Fi/hotspot firewall. ON removes the restriction and lets Android use its normal route. The NEMESIS service must be running. Android system DNS and external VLC are outside this app's firewall.",14));
   }
 
   // VLC is outside our app-UID network guard; require explicit user opt-in.
@@ -1049,7 +1081,8 @@ public class MainActivity extends Activity {
     add(text("No special setup: start a fresh video, watch at least 60 seconds, close VLC and return here. The app automatically measures the modem, Wi-Fi, and VLC received data while playback is open. These are diagnostic indicators, not definitive per-packet proof.",16));
     add(text(prefs.getString("video_route_report","No VLC playback measured with this build yet."),16));
     add(btn("Clear video data test result",new Runnable(){public void run(){prefs.edit().remove("video_route_report").apply();render("Diagnostics",false);}}));
-    add(text("NETWORK GUARD: NEMESIS service stremiogen5w/netguard blocks this app's modem traffic when active. Verify its service log and firewall status. Android DNS and VLC are outside the app UID rule.",16));
+    add(text("Use Internal Modem preference: "+(getSharedPreferences("network",0).getBoolean("use_internal_modem",false)?"ON — allow normal Android route":"OFF — request Wi-Fi/hotspot-only firewall"),16));
+    add(text("NETWORK GUARD: NEMESIS service stremiogen5w/netguard applies this preference within a few seconds. Verify its log and firewall rules. Android system DNS and VLC are outside the app UID rule.",16));
     ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
     try {
       NetworkInfo active=cm==null?null:cm.getActiveNetworkInfo();

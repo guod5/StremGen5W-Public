@@ -41,10 +41,10 @@ jobs:
         run: |
           bash -n svc/netguard.sh scripts/preun.sh
           python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v1.0.1 source without Git history
+      - name: Export clean v1.1.0 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.1.0-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.1.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -56,19 +56,19 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=1.0.1" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=26" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=1.1.0" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=27" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=1.0.1" in data and "name=Stremio Auto" in data
+              assert "version=1.1.0" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
-              assert "version=1.1" in data and "package-version=1.0.1" in data
+              assert "version=1.1" in data and "package-version=1.1.0" in data
               assert "type=application,service" in data and "preuninstall=scripts/preun.sh" in data
               assert "[service.0]" in data and "name=netguard" in data
               assert "uid=root" in data and "mode=restart" in data
@@ -77,6 +77,11 @@ jobs:
               assert all(s in guard for s in (b"APP_PKG=com.gen5.stremio",b"CHAIN=stremio_net",b"iptables ip6tables",b"lo wlan+ bnep+ bt-pan+ usb+ rndis+",b"--uid-owner",b"15"))
               assert b"stremio_net" in z.read("scripts/preun.sh")
               assert b"MIT License" in z.read("notices/NETGUARD_LICENSE.txt")
+              assert b'shared_prefs/network.xml' in guard, "Settings-to-firewall preference bridge missing"
+              assert b'use_internal_modem' in guard, "Modem toggle handling missing from firewall"
+              assert b'unblock()' in guard, "Firewall removal missing"
+              assert b'if use_internal_modem; then' in guard, "Firewall mode switch missing"
+              assert b'NETGUARD_INTERVAL:-2' in guard, "Two-second setting update missing"
               apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
               assert z.testzip() is None
@@ -90,6 +95,8 @@ jobs:
               assert b"FlagText" in dex, "Android 4.4 flag renderer missing from APK"
               assert b"STREMIO AUTO" in dex, "Stremio Auto app name missing from APK"
               assert b"VLC is not network protected" in dex, "External VLC network warning missing from APK"
+              assert b"Use Internal Modem" in dex, "Internal modem setting missing from APK"
+              assert b"use_internal_modem" in dex, "Persisted modem preference missing from APK"
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
@@ -100,9 +107,9 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[ship-v1.0.1]'))
+        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[ship-v1.1.0]'))
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -117,34 +124,35 @@ jobs:
               exit 1
             }
           else
-            test "$tag" = "v1.0.1" || {
-              echo "One-shot launch marker can only publish v1.0.1" >&2
+            test "$tag" = "v1.1.0" || {
+              echo "One-shot launch marker can only publish v1.1.0" >&2
               exit 1
             }
           fi
           cat > dist/release-notes.md <<'NOTES'
-          # Stremio Auto v1.0.1 — Wi-Fi / Hotspot Network Guard
+          # Stremio Auto v1.1.0 — Internal Modem Toggle
 
-          Stremio Auto is an **unofficial** community project for NEMESIS-enabled Hyundai/Kia/Genesis Gen5 Android 4.4 head units, not affiliated with Stremio or the vehicle manufacturers.
+          **Stremio Auto is an unofficial community project** for NEMESIS-enabled Hyundai/Kia/Genesis Android 4.4 head units. It is not affiliated with Stremio or the vehicle manufacturers.
 
-          This update adds a root NEMESIS service restricting **Stremio Auto's own outgoing IPv4 and IPv6 connections** to Wi-Fi, Bluetooth PAN or USB hotspot interfaces instead of the head unit's internal Ethernet or telematics modem. It adapts the per-UID firewall from [KramerTech's gen5-SmartTube](https://github.com/KramerTech/gen5-SmartTube) under the MIT license.
+          ### New in v1.1.0
+
+          - **Settings → Use Internal Modem** (OFF by default): OFF maintains the NEMESIS Wi-Fi/Bluetooth/USB hotspot firewall. ON removes Stremio Auto's firewall restriction and allows Android to use its normal route, including the car's internal modem. **Vehicle data usage may be monitored by HMG.**
+          - Switching modes saves the preference and the root NEMESIS service checks it every two seconds. No app restart or reinstall is needed after changing the toggle.
+          - The firewall still follows app UID changes, covers IPv4 and IPv6 when operating, and cleans up its own rules on uninstall.
+          - The external VLC player remains optional and off by default; it uses a different UID and is not controlled by Stremio's firewall.
+          - All existing ExoPlayer features, FFmpeg audio, source flags, English soundtrack preference, parked-use settings, and the selected pixel icon are retained.
 
           ### Installation
 
-          Download **Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip**, extract its three contents to the USB drive root, insert into a fully booted NEMESIS head unit, and confirm installation.
+          Download **Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip** and extract its three contents to the USB drive root before installing on a compatible NEMESIS head unit.
 
-          **The clean installer clears only Stremio Auto's stored login, cache and preferences.** Sign in again after installing. It does not uninstall unrelated NEMESIS apps.
+          **This clean installer resets Stremio Auto's stored login, cache, and settings**, and does not uninstall unrelated NEMESIS apps. Sign in again after installing.
 
-          ### Network guard
+          ### Limitations
 
-          - A root NEMESIS service (`stremiogen5w/netguard`) maintains the IPv4 and IPv6 per-app firewall. It follows the Android UID after reinstall and starts at boot.
-          - Only loopback (`lo`), Wi-Fi (`wlan+`), Bluetooth PAN (`bnep+`, `bt-pan+`), and USB hotspot (`usb+`, `rndis+`) are permitted for Stremio Auto.
-          - VLC integration now defaults **off**. Enabling the external VLC player requires acknowledging that it is outside Stremio Auto's network protection.
-          - Confirm the service is running in NEMESIS Manager → Services; its log is `/data/nemesis/logs/stremiogen5w/netguard.log`. NEMESIS 1.16+ is recommended.
+          The firewall must run as a root NEMESIS service; turning the toggle ON only **allows** the car modem, it does not force Android to select that connection. Switching can take several seconds. The firewall doesn't restrict Android's system DNS process (`netd`) or external apps like VLC. This has not yet been verified on the user's head unit. NEMESIS 1.16+ is recommended. Check `stremiogen5w/netguard` in NEMESIS Manager → Services and its log at `/data/nemesis/logs/stremiogen5w/netguard.log`.
 
-          **Limitations:** This is not an absolute no-modem guarantee. The firewall requires an operational NEMESIS service, may take seconds to apply/reapply, and does not control Android system DNS (`netd`), VLC or other apps. Actual Gen5 routing must be verified on the vehicle. Wireless CarPlay does not itself provide a confirmed phone data route.
-
-          Existing ExoPlayer controls, bundled FFmpeg audio codecs, English audio preference, flag graphics, and selected IONIQ-style icon remain unchanged. Use only while the vehicle is parked.
+          Use only while parked; never watch video while driving.
           NOTES
           # Never replace assets or source behind an already published version.
           if gh release view "$tag" >/dev/null 2>&1; then
@@ -152,9 +160,9 @@ jobs:
             exit 0
           fi
           gh release create "$tag" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip" \
-            --title "Stremio Auto v1.0.1" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.1.0-Source.zip" \
+            --title "Stremio Auto v1.1.0" \
             --notes-file dist/release-notes.md \
             --target "${GITHUB_SHA}"
       - uses: actions/upload-artifact@v4

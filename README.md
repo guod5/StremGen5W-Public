@@ -6,7 +6,7 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Latest release:** v1.0.1 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Latest release:** v1.1.0 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
@@ -16,13 +16,13 @@ This is a work in progress. It is **not as feature-rich or polished as official 
 - Use bundled FFmpeg audio codec support on Android 4.4 (API 19, ARMv7).
 - Use VLC as an optional external fallback if installed. **VLC integration defaults off** because VLC has a separate Android UID and is not protected by Stremio Auto's network firewall. Enabling it shows a warning. With VLC off, Watch is larger.
 - Install using a NEMESIS USB ZIP and build from the included Android source.
-- Restrict this app's own traffic to Wi-Fi or Bluetooth/USB hotspots, using a root NEMESIS network guard adapted from gen5-SmartTube.
+- Choose whether Stremio Auto can use the vehicle's internal modem with **Settings → Use Internal Modem** (off by default), backed by the NEMESIS network guard adapted from gen5-SmartTube.
 
 Functionality depends on stream formats, third-party add-ons, network conditions, and the head unit's firmware. Not every feature from the official Stremio applications is implemented.
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 
@@ -30,11 +30,12 @@ The Android application ID (`com.gen5.stremio`) and NEMESIS package ID (`stremio
 
 ## Wi-Fi / hotspot network restriction
 
-Starting with v1.0.1, the USB installer adds the **stremiogen5w/netguard** service alongside the app. It uses the same per-app UID firewall approach introduced by [KramerTech's gen5-SmartTube](https://github.com/KramerTech/gen5-SmartTube). NEMESIS starts the service as root at boot. It applies IPv4 and IPv6 firewall rules, refreshes the Android app UID every 15 seconds following reinstalls, and reapplies missing rules.
+The USB installer includes the **stremiogen5w/netguard** root service alongside Stremio Auto. It uses the per-app UID firewall approach introduced by [KramerTech's gen5-SmartTube](https://github.com/KramerTech/gen5-SmartTube). NEMESIS starts the service on boot. It applies IPv4 and IPv6 firewall rules and monitors Android's app UID after reinstalls.
 
+In **Settings → Use Internal Modem**, **OFF (default)** keeps this firewall enabled to restrict Stremio Auto to Wi-Fi and Bluetooth/USB hotspots. **ON** removes Stremio Auto's firewall rules, allowing Android to use its normal network routing, including the car's built-in data connection. **This may be monitored by HMG.** ON allows the modem but does not force Android to select it. The service reads this separate saved preference every 2 seconds, so switching does not require an app restart or reinstall. Changes normally apply within a few seconds.
 The permitted interfaces are Wi-Fi (`wlan+`), Bluetooth PAN (`bnep+`, `bt-pan+`), USB tethering (`usb+`, `rndis+`) and loopback (`lo`). The guard rejects normal outgoing connections from Stremio Auto's UID over telematics (`rmnet*`) and internal Ethernet (`eth0`). If no approved connection exists, normal app requests should fail while the firewall is operational. It does not create a phone internet connection or depend on Wireless CarPlay.
 
-**Limitations:** This protection works only while NEMESIS and its firewall service are functioning. After installation or reboot, rules may take several seconds to be set up. Android system DNS (`netd`) can resolve names through a different UID using the modem, and other apps including external VLC are not covered. It is **not an absolute whole-car no-modem guarantee**. VLC is therefore off by default and warns before opting in.
+**Limitations:** When Use Internal Modem is OFF, protection works only while NEMESIS and its firewall service are functioning. After installation, reboot or switching modes, rules may take several seconds to be set up or removed. Android system DNS (`netd`) can resolve names through a different UID using the modem, and other apps including external VLC are not covered. It is **not an absolute whole-car no-modem guarantee**. VLC is therefore off by default and warns before opting in.
 
 **NEMESIS 1.16 or newer is recommended** for service reliability. On-device behavior with NEMESIS 1.15 has not been verified. Check NEMESIS Manager → Services for `stremiogen5w/netguard` and its log at `/data/nemesis/logs/stremiogen5w/netguard.log`. If the service is stopped or the firewall reports incomplete rules, do not assume modem traffic is blocked. Uninstalling Stremio Auto removes its own firewall chain, without touching unrelated applications.
 
