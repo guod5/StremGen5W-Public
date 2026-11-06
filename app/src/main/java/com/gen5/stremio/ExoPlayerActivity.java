@@ -68,6 +68,8 @@ public class ExoPlayerActivity extends Activity {
   private boolean audioFocusGranted=false;
   private boolean released=false,firstFrame=false,controlsVisible=true,seeking=false;
   private long lastPosition=0,lastDuration=0,openedAt=0;
+  private long watchedElapsedMs=0,lastWatchSample=0;
+  private PlaybackSync cloudSync;
   private String streamUrl="",videoTitle="";
   private FrameLayout root;
   private PlayerView video;
@@ -114,6 +116,14 @@ public class ExoPlayerActivity extends Activity {
       long p=player.getCurrentPosition(),d=player.getDuration();
       if(p>=0)lastPosition=p;
       if(d>0&&d!=C.TIME_UNSET)lastDuration=d;
+      long sample=android.os.SystemClock.elapsedRealtime();
+      if(lastWatchSample>0&&player.getPlayWhenReady()&&
+         player.getPlaybackState()==Player.STATE_READY&&firstFrame){
+        watchedElapsedMs+=Math.min(1000,Math.max(0,sample-lastWatchSample));
+      }
+      lastWatchSample=sample;
+      if(cloudSync!=null&&firstFrame&&lastPosition>=5000&&lastDuration>0)
+        cloudSync.record(lastPosition,lastDuration,watchedElapsedMs,false);
       if(!seeking){
         if(seek!=null&&lastDuration>0){
           seek.setProgress((int)Math.min(1000,lastPosition*1000L/lastDuration));
@@ -304,6 +314,12 @@ public class ExoPlayerActivity extends Activity {
     streamUrl=getIntent().getStringExtra("stream_url");
     videoTitle=getIntent().getStringExtra("stream_title");
     if(videoTitle==null)videoTitle="Stremio Auto";
+    String metaId=getIntent().getStringExtra("sync_meta_id");
+    String episodeId=getIntent().getStringExtra("sync_video_id");
+    String mediaType=getIntent().getStringExtra("sync_media_type");
+    String itemTitle=getIntent().getStringExtra("sync_item_title");
+    String poster=getIntent().getStringExtra("sync_poster");
+    cloudSync=new PlaybackSync(this,metaId,mediaType,episodeId,itemTitle,poster);
     if(streamUrl==null||(!streamUrl.startsWith("https://")&&!streamUrl.startsWith("http://"))){finish();return;}
     motionFeatureEnabled=getSharedPreferences("account",0).getBoolean("motion_lockout",false);
     motionLocked=motionFeatureEnabled;
@@ -370,6 +386,7 @@ public class ExoPlayerActivity extends Activity {
       if(motionLocked){showMotionDialog("Motion lockout is active.");return;}
       if(player==null)return;
       userPaused=player.getPlayWhenReady();
+      if(userPaused)syncCurrentPosition();
       player.setPlayWhenReady(!userPaused);
       showControls(true);
     }});
@@ -484,6 +501,7 @@ public class ExoPlayerActivity extends Activity {
             scheduleHide();
           }else if(state==Player.STATE_BUFFERING && !firstFrame)status("Buffering video…");
           else if(state==Player.STATE_ENDED){
+            syncCurrentPosition();
             showControls(true);status("Playback finished. Tap Sources to return.");
           }
           updateAudioTrackInfo();
@@ -933,8 +951,21 @@ public class ExoPlayerActivity extends Activity {
     presentModal(dialog);
   }
 
+  // Called on pause, exit and playback completion; these are real measured
+  // player positions. HTTP requests are queued off the player/UI thread.
+  private void syncCurrentPosition(){
+    if(cloudSync==null||player==null||!firstFrame)return;
+    try{
+      long position=player.getCurrentPosition();
+      long duration=player.getDuration();
+      if(position>=5000&&duration>0&&duration!=C.TIME_UNSET)
+        cloudSync.record(position,duration,watchedElapsedMs,true);
+    }catch(Throwable ignored){}
+  }
   private void exit(String fallback){
     if(released)return;
+    syncCurrentPosition();
+    if(cloudSync!=null){cloudSync.finish();cloudSync=null;}
     if(motionGuard!=null)motionGuard.stop();
     if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
     released=true;handler.removeCallbacks(hideRunnable);handler.removeCallbacks(progressRunnable);
@@ -974,12 +1005,15 @@ public class ExoPlayerActivity extends Activity {
   }
   @Override protected void onPause(){
     if(motionGuard!=null)motionGuard.stop();
+    syncCurrentPosition();
     super.onPause();
     if(player!=null&&!released){
       player.setPlayWhenReady(false);showControls(true);
     }
   }
   @Override protected void onDestroy(){
+    if(!released)syncCurrentPosition();
+    if(cloudSync!=null){cloudSync.finish();cloudSync=null;}
     if(motionGuard!=null){motionGuard.stop();motionGuard=null;}
     if(motionDialog!=null){motionDialog.dismiss();motionDialog=null;motionDialogText=null;}
     restoreBrightness();

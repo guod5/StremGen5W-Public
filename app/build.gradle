@@ -7,8 +7,8 @@ android {
         minSdk 19
         targetSdk 19
         ndk { abiFilters 'armeabi-v7a' }
-        versionCode 28
-        versionName '1.1.1'
+        versionCode 29
+        versionName '1.1.2'
     }
     ndkVersion '21.4.7075529'
     externalNativeBuild {

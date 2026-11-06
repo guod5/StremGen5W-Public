@@ -6,12 +6,14 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Latest release:** v1.1.1 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Latest release:** v1.1.2 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
 - Sign in to your own Stremio account and access compatible library, Continue Watching, add-on, movie, and series content.
 - Play supported video sources inside the app with ExoPlayer, audio/subtitle options, controls, and resizing. Prefer supported English soundtracks automatically when the stream identifies their language; users can select another track manually.
+- Automatically sync supported movies and individual episodes to your signed-in Stremio account while watching (about every 30 seconds), on pause, and when leaving the built-in player. Watch-only titles appear in cross-device Continue Watching without first adding them to Library. No manual timestamp entry is required.
+- Choose a season and episode for supported series before opening their streaming sources, so playback sync uses the real episode ID rather than the show ID.
 - Render common country flags and language indicators as bundled images on Android 4.4 rather than relying on unsupported system flag emoji fonts.
 - Use bundled FFmpeg audio codec support on Android 4.4 (API 19, ARMv7).
 - Use VLC as an optional external fallback if installed. **VLC integration defaults off** because VLC has a separate Android UID and is not protected by Stremio Auto's network firewall. Enabling it shows a warning. With VLC off, Watch is larger.
@@ -26,7 +28,7 @@ On the first launch after installation, the app displays one combined **Welcome 
 
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v1.1.2-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 
@@ -42,6 +44,14 @@ The permitted interfaces are Wi-Fi (`wlan+`), Bluetooth PAN (`bnep+`, `bt-pan+`)
 **Limitations:** When Use Internal Modem is OFF, protection works only while NEMESIS and its firewall service are functioning. After installation, reboot or switching modes, rules may take several seconds to be set up or removed. Android system DNS (`netd`) can resolve names through a different UID using the modem, and other apps including external VLC are not covered. It is **not an absolute whole-car no-modem guarantee**. VLC is therefore off by default and warns before opting in.
 
 **NEMESIS 1.16 or newer is recommended** for service reliability. On-device behavior with NEMESIS 1.15 has not been verified. Check NEMESIS Manager → Services for `stremiogen5w/netguard` and its log at `/data/nemesis/logs/stremiogen5w/netguard.log`. If the service is stopped or the firewall reports incomplete rules, do not assume modem traffic is blocked. Uninstalling Stremio Auto removes its own firewall chain, without touching unrelated applications.
+
+## Automatic account watch-progress syncing
+
+In the built-in ExoPlayer, Stremio Auto saves actual playback positions and watched time to Stremio's `libraryItem` datastore automatically. Sync happens periodically (about every 30 seconds), on pause, when returning to sources, and when playback ends. A signed-in Stremio account and a functioning internet connection are required. Cloud sync works for supported movies with a stable metadata ID and for series episodes with a valid episode video ID. The **Info** tab shows the last cloud sync status.
+
+For series, choose the season and episode on the Streams screen. This uses episode identifiers from the Stremio-compatible Cinemeta metadata service where available. Other devices can show the resulting progress after their next account/library refresh; this is not an immediate push notification. There is no longer a manual VLC minute-entry form. External VLC is an emergency fallback and does **not** provide guaranteed playback-position syncing to Stremio.
+
+When a title has not been explicitly added to Library, the app creates a temporary watch-history entry compatible with Stremio's Continue Watching model rather than forcing it into the user's saved Library. This is based on the public [Stremio Core data model](https://github.com/Stremio/stremio-core). Unlike local resume, cloud updates depend on the Stremio API accepting the write. Progress can be delayed or lost during an unexpected power or connectivity failure, especially during the final seconds; an actual vehicle-to-TV test is still needed to verify interoperability.
 
 ## Optional video codec patch
 

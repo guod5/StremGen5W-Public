@@ -26,7 +26,7 @@ import java.security.MessageDigest;
 /** Android 4.4 native client. All network operations run off the UI thread. */
 public class MainActivity extends Activity {
   final int bg=0xff0b0d12, accent=0xff13b7a6, surface=0xff191e28, muted=0xffaeb8c5;
-  LinearLayout root,body; String page="Home",auth="",selectedId="",selectedType="movie";
+  LinearLayout root,body; String page="Home",auth="",selectedId="",selectedType="movie",selectedVideoId="",selectedVideoLabel="",selectedPoster="";
   ArrayList<String> history=new ArrayList<String>(); JSONArray addons=new JSONArray(); JSONArray libraryItems=new JSONArray(); boolean returningFromPlayer=false; int generation=0; ArrayList<String> errors=new ArrayList<String>(); boolean routeVerified=false; String selectedName=""; final String CINEMETA="https://v3-cinemeta.strem.io/";
   float sx,sy; android.content.SharedPreferences prefs;
   // Persistent preferences: motion lockout defaults OFF; reminder defaults ON.
@@ -109,6 +109,9 @@ public class MainActivity extends Activity {
     selectedId=b==null?prefs.getString("selected_id",""):b.getString("selected_id",prefs.getString("selected_id",""));
     selectedType=b==null?prefs.getString("selected_type","movie"):b.getString("selected_type","movie");
     selectedName=b==null?prefs.getString("selected_name",""):b.getString("selected_name","");
+    selectedVideoId=prefs.getString("selected_video_id","");
+    selectedVideoLabel=prefs.getString("selected_video_label","");
+    selectedPoster=prefs.getString("selected_poster","");
     immersiveWindow();
     String restore=b==null?"":b.getString("previous_page","");
     if((prefs.getBoolean("external_playback",false)||"Streams".equals(restore)||"Player".equals(restore)||"Streams".equals(prefs.getString("last_page","")))&&!selectedId.isEmpty())
@@ -203,7 +206,7 @@ public class MainActivity extends Activity {
     state.putString("selected_name",selectedName);state.putString("previous_page",page);
     super.onSaveInstanceState(state);
   }
-  void rememberTitle(){if(prefs!=null)prefs.edit().putString("selected_id",selectedId).putString("selected_type",selectedType).putString("selected_name",selectedName).apply();}
+  void rememberTitle(){if(prefs!=null)prefs.edit().putString("selected_id",selectedId).putString("selected_type",selectedType).putString("selected_name",selectedName).putString("selected_video_id",selectedVideoId).putString("selected_video_label",selectedVideoLabel).putString("selected_poster",selectedPoster).apply();}
   void refreshAccountIdentity(){
     if(auth.isEmpty()||accountIdentityLoading)return;
     accountIdentityLoading=true;
@@ -766,7 +769,24 @@ public class MainActivity extends Activity {
     if(posterUrl.startsWith("https://")||posterUrl.startsWith("http://"))poster(cover,posterUrl,fallbackPoster);
     else if(!fallbackPoster.isEmpty())poster(cover,fallbackPoster);
     else {cover.setBackgroundColor(0xff353b55);synchronized(artworkCache){posterMissing++;}}
-    final Runnable openTitle=new Runnable(){public void run(){selectedId=id;selectedType=mt;selectedName=name;rememberTitle();render("Streams",true);}};
+    final String chosenPoster=posterUrl.startsWith("https://")||posterUrl.startsWith("http://")?posterUrl:fallbackPoster;
+    final Runnable openTitle=new Runnable(){public void run(){
+      String parentId="series".equals(mt)?artworkId(id):id;
+      if(!parentId.equals(selectedId)||!mt.equals(selectedType)){
+        selectedVideoId="";selectedVideoLabel="";
+      }
+      selectedId=parentId;selectedType=mt;selectedName=name;selectedPoster=chosenPoster;
+      if("series".equals(mt)){
+        if(id.matches(".*:[0-9]+:[0-9]+"))selectedVideoId=id;
+        else if(selectedVideoId.isEmpty()){
+          JSONObject saved=existingLibraryItem(parentId);
+          JSONObject state=saved==null?null:saved.optJSONObject("state");
+          String episode=state==null?"":state.optString("video_id","");
+          if(episode.startsWith(parentId+":"))selectedVideoId=episode;
+        }
+      }else selectedVideoId=selectedId;
+      rememberTitle();render("Streams",true);
+    }};
     View.OnClickListener openPoster=new View.OnClickListener(){public void onClick(View tapped){openTitle.run();}};
     tile.setOnClickListener(openPoster);
     cover.setOnClickListener(openPoster);
@@ -1105,6 +1125,7 @@ public class MainActivity extends Activity {
     add(btn("Clear video data test result",new Runnable(){public void run(){prefs.edit().remove("video_route_report").apply();render("Diagnostics",false);}}));
     add(text("Use Internal Modem preference: "+(getSharedPreferences("network",0).getBoolean("use_internal_modem",false)?"ON — allow normal Android route":"OFF — request Wi-Fi/hotspot-only firewall"),16));
     add(text("NETWORK GUARD: NEMESIS service stremiogen5w/netguard applies this preference within a few seconds. Verify its log and firewall rules. Android system DNS and VLC are outside the app UID rule.",16));
+    add(text("Stremio cloud watch sync: "+prefs.getString("cloud_sync_status","No built-in playback synced yet."),16));
     ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
     try {
       NetworkInfo active=cm==null?null:cm.getActiveNetworkInfo();
@@ -1357,67 +1378,6 @@ public class MainActivity extends Activity {
     }
     return null;
   }
-  void saveProgress(final long time,final long duration,final boolean automatic){
-    if("series".equals(selectedType)&&!selectedId.matches(".*:[0-9]+:[0-9]+")){if(!automatic)message("Episode-specific information is required to sync series progress. No changes were sent to your Stremio account.");return;}
-    if(auth.isEmpty()){if(!automatic)message("Sign into your Stremio account before saving progress.");return;}
-    if(verifiedAccountEmail.isEmpty()){if(!automatic)message("Verify the Stremio account under Account before changing watch progress.");return;}
-    if(existingLibraryItem(selectedId)==null){if(!automatic)message("This title was not present in your synced Stremio library. No new title was added automatically.");return;}
-    if(selectedId.isEmpty()||time<0){message("No valid playback position to sync.");return;}
-    final String mediaId=selectedId,mediaType=selectedType,mediaName=selectedName;
-    request(new Job(){public JSONObject run()throws Exception{
-      JSONObject old=existingLibraryItem(mediaId);
-      JSONObject item=old==null?new JSONObject():new JSONObject(old.toString());
-      String now=dateNow();
-      item.put("_id",mediaId);item.put("name",mediaName);item.put("type",mediaType);
-      item.put("removed",false);
-      if(old==null){
-        item.put("temp",true);item.put("_ctime",now);item.put("poster",mediaId.startsWith("tt")?"https://images.metahub.space/poster/medium/"+artworkId(mediaId)+"/img":"");
-      }
-      item.put("_mtime",now);
-      JSONObject st=item.optJSONObject("state");if(st==null)st=new JSONObject();
-      st.put("timeOffset",time);
-      if(duration>0)st.put("duration",duration);
-      else if(!st.has("duration"))st.put("duration",0);
-      if(!st.has("timeWatched"))st.put("timeWatched",0);
-      if(!st.has("overallTimeWatched"))st.put("overallTimeWatched",0);
-      if(!st.has("timesWatched"))st.put("timesWatched",0);
-      if(!st.has("flaggedWatched"))st.put("flaggedWatched",0);
-      if(!st.has("watched"))st.put("watched","");
-      if(!st.has("season"))st.put("season",0);
-      if(!st.has("episode"))st.put("episode",0);
-      if(!st.has("noNotif"))st.put("noNotif",false);
-      st.put("lastWatched",now);
-      if(!st.has("video_id"))st.put("video_id",mediaId);
-      item.put("state",st);
-      JSONObject payload=authJson();payload.put("collection","libraryItem");
-      JSONArray updates=new JSONArray();updates.put(item);payload.put("changes",updates);
-      return post("datastorePut",payload);
-    }},new Result(){public void done(JSONObject response){
-      lastLibrarySync=0;
-      refreshLibrary(true);
-      if(!automatic)message("Progress saved to your Stremio account. Other devices should see it after their next sync.");
-    }});
-  }
-  void showManualProgress(){
-    if(auth.isEmpty())return;
-    add(text("SYNC WATCH PROGRESS",18));
-    add(text(vlcIntegrationEnabled()?
-      "After VLC closes, playback progress syncs automatically if VLC reports its actual position. Otherwise enter the minute reached and tap Save.":
-      "If playback progress did not sync, enter the minute reached and tap Save.",14));
-    final EditText minutes=new EditText(this);styleField(minutes);
-    minutes.setHint("Minutes watched, for example 37");
-    minutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-    add(minutes);
-    add(btn("Save progress to my Stremio account",new Runnable(){public void run(){
-      try{long minute=Long.parseLong(minutes.getText().toString().trim());
-        if(minute<0||minute>6000){message("Enter a valid minute.");return;}
-        JSONObject existing=existingLibraryItem(selectedId);
-        JSONObject state=existing==null?null:existing.optJSONObject("state");
-        long duration=state==null?0:state.optLong("duration",0);
-        saveProgress(minute*60000L,duration,false);
-      }catch(Exception e){message("Please enter a number of minutes.");}
-    }}));
-  }
   // Source cards: show actual metadata returned by each add-on, not giant buttons
   // with a clipped, multi-line source title.
   String streamCombined(JSONObject stream){
@@ -1510,7 +1470,8 @@ public class MainActivity extends Activity {
     return data.toString();
   }
   void drawSources(){
-    if(sourcePanel==null||!"Streams".equals(page)||!visibleStreamTitle.equals(selectedType+"|"+selectedId))return;
+    if(sourcePanel==null||!"Streams".equals(page)||
+       !visibleStreamTitle.equals(selectedType+"|"+("series".equals(selectedType)?selectedVideoId:selectedId)))return;
     sourcePanel.removeAllViews();
     final boolean showVlc=vlcIntegrationEnabled();
     int entries=0,playable=0,low=0,high=0;
@@ -1618,9 +1579,115 @@ public class MainActivity extends Activity {
       entry.getValue().setTextColor(active?0xff071312:Color.WHITE);
     }
   }
+  // Series watch history requires the exact episode video ID, not the show ID.
+  // Use Cinemeta's official Stremio metadata IDs rather than guessing S/E.
+  void chooseSeriesEpisode(){
+    add(text("Choose an episode",21));
+    add(text("Select the season and episode you want to watch. This also lets Stremio sync the correct episode to your other devices.",15));
+    final TextView loading=text("Loading episodes…",15);add(loading);
+    final LinearLayout list=new LinearLayout(this);
+    list.setOrientation(1);add(list);
+    final String originalId=selectedId;
+    if(!artworkId(originalId).startsWith("tt")){
+      loading.setText("Episode metadata is unavailable for this series ID. Please choose an IMDb-based series entry.");
+      return;
+    }
+    apiWorkers.execute(new Runnable(){public void run(){
+      try{
+        JSONObject data=get(CINEMETA+"meta/series/"+enc(artworkId(originalId))+".json");
+        JSONObject meta=data.optJSONObject("meta");
+        JSONArray videos=meta==null?null:meta.optJSONArray("videos");
+        if(videos==null||videos.length()==0)throw new IOException("No episodes returned");
+        final java.util.TreeMap<Integer,ArrayList<JSONObject>> seasons=
+          new java.util.TreeMap<Integer,ArrayList<JSONObject>>();
+        for(int i=0;i<videos.length();i++){
+          JSONObject v=videos.optJSONObject(i);
+          if(v==null)continue;
+          String id=v.optString("id","");
+          int season=v.optInt("season",-1),episode=v.optInt("episode",-1);
+          if(id.isEmpty()||season<0||episode<0)continue;
+          ArrayList<JSONObject> found=seasons.get(season);
+          if(found==null){found=new ArrayList<JSONObject>();seasons.put(season,found);}
+          found.add(v);
+        }
+        if(seasons.isEmpty())throw new IOException("Episode IDs unavailable");
+        runOnUiThread(new Runnable(){public void run(){
+          if(isFinishing()||!"Streams".equals(page)||!originalId.equals(selectedId))return;
+          loading.setText("Select a season, then tap the episode to see its streams.");
+          final ArrayList<Integer> seasonIds=new ArrayList<Integer>(seasons.keySet());
+          ArrayList<String> labels=new ArrayList<String>();
+          for(Integer number:seasonIds)labels.add(number.intValue()==0?"Specials":"Season "+number);
+          final Spinner spinner=new Spinner(MainActivity.this);
+          ArrayAdapter<String> adapter=new ArrayAdapter<String>(
+            MainActivity.this,android.R.layout.simple_spinner_item,labels);
+          adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+          spinner.setAdapter(adapter);
+          addEpisodePickerView(list,spinner);
+          final LinearLayout episodeList=new LinearLayout(MainActivity.this);
+          episodeList.setOrientation(1);
+          list.addView(episodeList);
+          spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(android.widget.AdapterView<?> a){}
+            public void onItemSelected(android.widget.AdapterView<?> a,View view,int pos,long key){
+              episodeList.removeAllViews();
+              if(pos<0||pos>=seasonIds.size())return;
+              ArrayList<JSONObject> selected=seasons.get(seasonIds.get(pos));
+              java.util.Collections.sort(selected,new java.util.Comparator<JSONObject>(){
+                public int compare(JSONObject a,JSONObject b){
+                  return a.optInt("episode",0)-b.optInt("episode",0);
+                }
+              });
+              for(final JSONObject episode:selected){
+                final String episodeId=episode.optString("id","");
+                final int seasonNumber=episode.optInt("season",0);
+                final int episodeNumber=episode.optInt("episode",0);
+                String episodeName=episode.optString("title",episode.optString("name",""));
+                final String display=String.format(java.util.Locale.US,"S%dE%d",seasonNumber,episodeNumber)+
+                  (episodeName.isEmpty()?"":" • "+episodeName);
+                Button button=btn(display,new Runnable(){public void run(){
+                  selectedVideoId=episodeId;
+                  selectedVideoLabel=display;
+                  rememberTitle();render("Streams",false);
+                }});
+                button.setBackgroundDrawable(shape(surface,9));
+                button.setTextSize(15);
+                episodeList.addView(button,new LinearLayout.LayoutParams(-1,dp(53)));
+              }
+            }
+          });
+          int choice=seasonIds.indexOf(Integer.valueOf(1));
+          if(choice<0)choice=0;
+          spinner.setSelection(choice);
+        }});
+      }catch(final Exception e){
+        runOnUiThread(new Runnable(){public void run(){
+          if(!isFinishing()&&"Streams".equals(page)&&originalId.equals(selectedId))
+            loading.setText("Could not load episode information. Check your network connection and try opening this series again.");
+        }});
+      }
+    }});
+  }
+  void addEpisodePickerView(LinearLayout parent,View child){
+    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(51));
+    lp.setMargins(dp(10),dp(5),dp(10),dp(9));
+    parent.addView(child,lp);
+  }
+
   void loadStreams(){
     qualityButtons.clear();
-    final String key=selectedType+"|"+selectedId;
+    if("series".equals(selectedType)){
+      if(selectedVideoId.isEmpty()){
+        chooseSeriesEpisode();
+        return;
+      }
+      final Button change=btn("Change episode",new Runnable(){public void run(){
+        selectedVideoId="";selectedVideoLabel="";rememberTitle();render("Streams",false);
+      }});
+      add(change);
+      if(!selectedVideoLabel.isEmpty())add(text("Selected episode: "+selectedVideoLabel,17));
+    }
+    final String resourceId="series".equals(selectedType)?selectedVideoId:selectedId;
+    final String key=selectedType+"|"+resourceId;
     visibleStreamTitle=key;
     visibleSources.clear();
     sourceRequests=0;
@@ -1652,9 +1719,9 @@ public class MainActivity extends Activity {
       final String manifest=manifestUrl(a);
       String base=baseUrl(manifest);if(!base.startsWith("https://"))continue;
       JSONObject mf=a.optJSONObject("manifest");
-      if(!supports(mf,"stream",selectedType,selectedId))continue;
+      if(!supports(mf,"stream",selectedType,resourceId))continue;
       final String url;
-      try{url=base+"stream/"+enc(selectedType)+"/"+enc(selectedId)+".json";}catch(Exception ignored){continue;}
+      try{url=base+"stream/"+enc(selectedType)+"/"+enc(resourceId)+".json";}catch(Exception ignored){continue;}
       final String provider=mf==null?"Add-on "+(i+1):mf.optString("name","Add-on "+(i+1));
       // Keep unique names even if multiple installed add-ons share a display label.
       final String sourceKey=provider+" #"+(i+1);
@@ -1695,7 +1762,6 @@ public class MainActivity extends Activity {
       }});
     }
     drawSources();
-    showManualProgress();
   }
   void openInAppPlayer(final String url){
     if(!parkedConfirmed){showParkedConfirmation();return;}
@@ -1709,7 +1775,12 @@ public class MainActivity extends Activity {
       Intent next=new Intent(this,ExoPlayerActivity.class);
       next.putExtra("parked_confirmed",parkedConfirmed);
       next.putExtra("stream_url",url);
-      next.putExtra("stream_title",selectedName);
+      next.putExtra("stream_title",selectedName+("series".equals(selectedType)&&!selectedVideoLabel.isEmpty()?" • "+selectedVideoLabel:""));
+      next.putExtra("sync_meta_id",selectedId);
+      next.putExtra("sync_video_id","series".equals(selectedType)?selectedVideoId:selectedId);
+      next.putExtra("sync_media_type",selectedType);
+      next.putExtra("sync_item_title",selectedName);
+      next.putExtra("sync_poster",selectedPoster);
       startActivityForResult(next,103);
     }catch(Throwable problem){
       message("In-app player unavailable: "+problem.getClass().getSimpleName()+
@@ -1750,10 +1821,12 @@ public class MainActivity extends Activity {
     if(requestCode==103){
       String fallback=data==null?"":data.getStringExtra("fallback_vlc_url");
       if(vlcIntegrationEnabled()&&fallback!=null&&!fallback.isEmpty()){openVlc(fallback);return;}
-      if(data!=null&&resultCode==RESULT_OK){
-        long position=data.getLongExtra("extra_position",-1L);
-        long duration=data.getLongExtra("extra_duration",-1L);
-        if(position>10000&&duration>0&&position<=duration)saveProgress(position,duration,true);
+      if(resultCode==RESULT_OK&&!auth.isEmpty()){
+        // The player writes its progress while running and when closed.
+        // Refresh the account library after the asynchronous last write.
+        new Handler().postDelayed(new Runnable(){public void run(){
+          if(!isFinishing()){lastLibrarySync=0;refreshLibrary(true);}
+        }},5000);
       }
       if(!selectedId.isEmpty()&&!"Streams".equals(page))render("Streams",false);
       return;
@@ -1761,11 +1834,7 @@ public class MainActivity extends Activity {
     if(requestCode==101){
       finishVideoMeasurement();returningFromPlayer=false;
       prefs.edit().putBoolean("external_playback",false).apply();
-      if(data!=null){
-        long position=data.getLongExtra("extra_position",-1L);
-        long duration=data.getLongExtra("extra_duration",-1L);
-        if(position>=0&&duration>position&&resultCode==RESULT_OK)saveProgress(position,duration,true);
-      }
+      // External VLC cannot be assumed to report trustworthy Stremio positions.
       // Keep the stream selection available when VLC returns; never jump to Home.
       if(!selectedId.isEmpty()&&!"Streams".equals(page))render("Streams",false);
     }

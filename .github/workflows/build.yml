@@ -35,16 +35,36 @@ jobs:
           test -s app/src/main/res/drawable-nodpi/stremio_auto_icon.webp
           echo 'c9f15f0074cb946b70355d9c8adb2f075d8fe5212424303ba3d96c6dd9194397  app/src/main/res/drawable-nodpi/stremio_auto_icon.webp' | sha256sum --check
           file app/src/main/res/drawable-nodpi/stremio_auto_icon.webp
+      - name: Validate automatic Stremio account sync implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          player = Path("app/src/main/java/com/gen5/stremio/ExoPlayerActivity.java").read_text()
+          main = Path("app/src/main/java/com/gen5/stremio/MainActivity.java").read_text()
+          sync = Path("app/src/main/java/com/gen5/stremio/PlaybackSync.java").read_text()
+          assert "newSingleThreadExecutor()" in sync, "Cloud writes must be serialized"
+          assert 'post("datastoreGet",find)' in sync and 'post("datastorePut",put)' in sync
+          assert 'state.put("video_id",videoId)' in sync, "Exact episode ID must sync"
+          assert 'item.put("temp",true)' in sync, "Unsaved titles must appear in Continue Watching"
+          assert 'item.put("removed",true)' in sync, "Do not auto-add titles to saved Library"
+          assert 'optBoolean("success",false)' in sync, "API result must be verified"
+          assert "cloudSync.record(lastPosition,lastDuration,watchedElapsedMs,false)" in player
+          assert "syncCurrentPosition();" in player and 'protected void onPause()' in player
+          assert 'next.putExtra("sync_video_id"' in main
+          assert 'void chooseSeriesEpisode()' in main, "Series need an episode picker"
+          assert "showManualProgress" not in main and "saveProgress(" not in main
+          print("Automatic progress sync / episode / VLC UI checks passed.")
+          PY
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
         run: |
           bash -n svc/netguard.sh scripts/preun.sh
           python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v1.1.1 source without Git history
+      - name: Export clean v1.1.2 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.1.1-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.1.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.1.2-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.1.2-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -56,19 +76,19 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.1.2-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=1.1.1" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=28" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=1.1.2" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=29" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=1.1.1" in data and "name=Stremio Auto" in data
+              assert "version=1.1.2" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
-              assert "version=1.1" in data and "package-version=1.1.1" in data
+              assert "version=1.1" in data and "package-version=1.1.2" in data
               assert "type=application,service" in data and "preuninstall=scripts/preun.sh" in data
               assert "[service.0]" in data and "name=netguard" in data
               assert "uid=root" in data and "mode=restart" in data
@@ -102,6 +122,12 @@ jobs:
               assert b"Welcome to Stremio Auto!" in dex, "Welcome title missing from APK"
               assert b"Before you start watching, check out Settings." in dex, "Welcome copy missing from APK"
               assert b"welcome_seen" in dex, "One-time preference missing from APK"
+              assert b"PlaybackSync" in dex, "Cloud playback sync missing from compiled APK"
+              assert b"sync_video_id" in dex, "Episode identity missing from APK"
+              assert b"cloud_sync_status" in dex, "Sync status feedback missing"
+              assert b"Choose an episode" in dex, "Episode selection missing"
+              assert b"SYNC WATCH PROGRESS" not in dex, "Obsolete manual VLC timestamp form remains"
+              assert b"Minutes watched, for example 37" not in dex, "Obsolete timecode input remains"
               assert "I'm Parked — Let's Go".encode("utf-8") in dex, "Combined first-use button missing from APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
@@ -112,9 +138,9 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.1.2-USB-Installer.zip
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[ship-v1.1.1]'))
+        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[ship-v1.1.2]'))
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -129,30 +155,31 @@ jobs:
               exit 1
             }
           else
-            test "$tag" = "v1.1.1" || {
-              echo "One-shot launch marker can only publish v1.1.1" >&2
+            test "$tag" = "v1.1.2" || {
+              echo "One-shot launch marker can only publish v1.1.2" >&2
               exit 1
             }
           fi
           cat > dist/release-notes.md <<'NOTES'
-          # Stremio Auto v1.1.1 — First-use Welcome
+          # Stremio Auto v1.1.2 — Automatic Stremio Watch Sync
 
-          This unofficial, community-built Stremio-compatible app runs on compatible Android 4.4 Hyundai/Kia/Genesis head units with NEMESIS.
+          Stremio Auto is an unofficial community client for NEMESIS-enabled Hyundai/Kia/Genesis Android 4.4 head units.
 
           ### What's new
 
-          - On first launch after a clean installation, one combined welcome and parked-use confirmation appears instead of two separate dialogs.
-          - **Welcome to Stremio Auto!** Before you start watching, check out Settings. You can control your internet connection, customize playback, and manage safety features.
-          - The combined first-run message includes **PARKED VEHICLE LOCK ENABLED**, parked-only video guidance, **Exit App** and **I'm Parked — Let's Go**.
-          - Once the user confirms, the welcome is saved as seen. Subsequent launches show the existing **PARKED VEHICLE REQUIRED** reminder unless disabled in Settings.
-          - This confirmation is a reminder and is distinct from the optional GPS motion lockout setting.
-          - The internal modem toggle, NEMESIS network guard, ExoPlayer, bundled FFmpeg audio, optional VLC integration and chosen pixel launcher icon remain unchanged.
+          - **Automatic built-in player sync:** Progress now saves to your signed-in Stremio account while watching (approximately every 30 seconds), on pause, when leaving the player, and at playback completion. There is no manual timecode entry.
+          - **Continue Watching across devices:** Watch-only movies and series get temporary Stremio watch-history entries without being added to your saved Library. Other devices should see progress after account refresh when the Stremio server accepts the update.
+          - **Episode selection:** Choose a season and episode before retrieving a series stream. This supplies the real episode video ID that Stremio needs for cross-device playback history.
+          - **Cleaner UI:** Removed the manual VLC playback minutes field. VLC remains optional as a last-resort external fallback and does not promise account progress synchronization.
+          - The existing first-launch welcome, parking confirmation, internal modem toggle, NEMESIS network guard, ExoPlayer controls, FFmpeg audio and selected launcher icon are preserved.
 
-          ### USB installation
+          ### Installation
 
-          Download **Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip**. Extract the three items onto a USB drive root and install through NEMESIS after the head unit has fully booted. The installer clears the app's login, cached data and preferences, so the welcome appears again on a clean install.
+          Download **Stremio-gen5-hmg-nemesis-v1.1.2-USB-Installer.zip**. Extract its three items to the USB drive root and install through NEMESIS after the Android head unit is fully booted. The installer cleans only Stremio Auto's package, clearing local login, settings and cache.
 
-          **Safety:** Only use the video player while parked. The app's optional GPS lockout is independent of the popup; do not treat the popup alone as a hardware-enforced interlock. Network firewall reliability requires an operational NEMESIS root service, and external VLC and Android's system DNS are outside its app-UID restriction.
+          ### Caveats
+
+          Cloud sync needs a signed-in Stremio account, a working connection, the correct movie/episode IDs and a successful Stremio API write. The car-to-TV sync behavior has not yet been tested with a real account; check **Info → Stremio cloud watch sync** after playback for status. Unexpected disconnections can prevent the latest progress from syncing. Android DNS and external VLC are outside the app firewall protection. Use video only while parked.
           NOTES
           # Never replace assets or source behind an already published version.
           if gh release view "$tag" >/dev/null 2>&1; then
@@ -160,9 +187,9 @@ jobs:
             exit 0
           fi
           gh release create "$tag" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.1.1-Source.zip" \
-            --title "Stremio Auto v1.1.1" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.1.2-USB-Installer.zip" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.1.2-Source.zip" \
+            --title "Stremio Auto v1.1.2" \
             --notes-file dist/release-notes.md \
             --target "${GITHUB_SHA}"
       - uses: actions/upload-artifact@v4
