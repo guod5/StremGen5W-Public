@@ -38,11 +38,13 @@ jobs:
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Package NEMESIS
-        run: python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
-      - name: Export clean v1.0.0 source without Git history
         run: |
-          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip HEAD
-          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
+          bash -n svc/netguard.sh scripts/preun.sh
+          python3 tools/package_nemesis.py app/build/outputs/apk/debug/app-debug.apk dist
+      - name: Export clean v1.0.1 source without Git history
+        run: |
+          git archive --format=zip --output=dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip HEAD
+          python3 -c "import zipfile; z=zipfile.ZipFile('dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip'); assert z.testzip() is None and all(not p.startswith('.git/') for p in z.namelist())"
       - name: Validate and name official NEMESIS USB installer
         shell: bash
         run: |
@@ -54,18 +56,27 @@ jobs:
           import zipfile
           from io import BytesIO
           src = pathlib.Path("dist/stremio-auto-nemesis-usb.zip")
-          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip")
+          dst = pathlib.Path("dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip")
           with zipfile.ZipFile(src) as z:
               assert z.testzip() is None
               assert set(z.namelist()) == {"NEMESIS.data", "NEMESIS.sh", "packages/stremio-auto.zip"}
-              assert "version=1.0.0" in z.read("NEMESIS.data").decode("utf-8")
-              assert "EXPECTED_CODE=25" in z.read("NEMESIS.sh").decode("utf-8")
+              assert "version=1.0.1" in z.read("NEMESIS.data").decode("utf-8")
+              assert "EXPECTED_CODE=26" in z.read("NEMESIS.sh").decode("utf-8")
               package = z.read("packages/stremio-auto.zip")
           with zipfile.ZipFile(BytesIO(package)) as z:
               assert z.testzip() is None
               data = z.read("NEMESIS.data").decode("utf-8")
-              assert "version=1.0.0" in data and "name=Stremio Auto" in data
+              assert "version=1.0.1" in data and "name=Stremio Auto" in data
               assert "path=app/StremioAuto.apk" in data
+              assert "version=1.1" in data and "package-version=1.0.1" in data
+              assert "type=application,service" in data and "preuninstall=scripts/preun.sh" in data
+              assert "[service.0]" in data and "name=netguard" in data
+              assert "uid=root" in data and "mode=restart" in data
+              assert {"svc/netguard.sh","scripts/preun.sh","notices/NETGUARD_LICENSE.txt"}.issubset(z.namelist())
+              guard = z.read("svc/netguard.sh")
+              assert all(s in guard for s in (b"APP_PKG=com.gen5.stremio",b"CHAIN=stremio_net",b"iptables ip6tables",b"lo wlan+ bnep+ bt-pan+ usb+ rndis+",b"--uid-owner",b"15"))
+              assert b"stremio_net" in z.read("scripts/preun.sh")
+              assert b"MIT License" in z.read("notices/NETGUARD_LICENSE.txt")
               apk = z.read("app/StremioAuto.apk")
           with zipfile.ZipFile(BytesIO(apk)) as z:
               assert z.testzip() is None
@@ -78,6 +89,7 @@ jobs:
               assert all("assets/flags/"+code+".png" in z.namelist() for code in ("gb","us","es","fr","de","jp")), "Bundled language flags missing from APK"
               assert b"FlagText" in dex, "Android 4.4 flag renderer missing from APK"
               assert b"STREMIO AUTO" in dex, "Stremio Auto app name missing from APK"
+              assert b"VLC is not network protected" in dex, "External VLC network warning missing from APK"
               assert b"PARKED VEHICLE REQUIRED" in dex, "Parking confirmation absent from compiled APK"
               assert b"parked_confirmed" in dex, "Player acknowledgement guard absent from compiled APK"
               assert b"Exit App" in dex, "Exit option absent from APK"
@@ -88,9 +100,9 @@ jobs:
           shutil.copyfile(src, dst)
           print(f"Validated public installer: {dst} ({dst.stat().st_size} bytes)")
           PY
-          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip
-      - name: Publish tagged GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+          sha256sum dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[ship-v1.0.1]'))
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -98,45 +110,51 @@ jobs:
           set -euo pipefail
           # Release only when the Git tag matches the APK's actual version.
           version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
-          test "$GITHUB_REF_NAME" = "v$version" || {
-            echo "Release tag $GITHUB_REF_NAME does not match versionName $version" >&2
-            exit 1
-          }
+          tag="v$version"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            test "$GITHUB_REF_NAME" = "$tag" || {
+              echo "Release tag $GITHUB_REF_NAME does not match versionName $version" >&2
+              exit 1
+            }
+          else
+            test "$tag" = "v1.0.1" || {
+              echo "One-shot launch marker can only publish v1.0.1" >&2
+              exit 1
+            }
+          fi
           cat > dist/release-notes.md <<'NOTES'
-          # Stremio Auto v1.0.0 — Public Launch
+          # Stremio Auto v1.0.1 — Wi-Fi / Hotspot Network Guard
 
-          Stremio Auto is an **unofficial, community-built Stremio-compatible client** for compatible Android 4.4 Hyundai Motor Group Gen5 head units running NEMESIS. This experimental hobby project was created through extensive AI-assisted development. It is not affiliated with or endorsed by Stremio, Hyundai, Kia, or NEMESIS.
+          Stremio Auto is an **unofficial** community project for NEMESIS-enabled Hyundai/Kia/Genesis Gen5 Android 4.4 head units, not affiliated with Stremio or the vehicle manufacturers.
 
-          ### Install using a NEMESIS USB drive
+          This update adds a root NEMESIS service restricting **Stremio Auto's own outgoing IPv4 and IPv6 connections** to Wi-Fi, Bluetooth PAN or USB hotspot interfaces instead of the head unit's internal Ethernet or telematics modem. It adapts the per-UID firewall from [KramerTech's gen5-SmartTube](https://github.com/KramerTech/gen5-SmartTube) under the MIT license.
 
-          Download **Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip**. Extract its three contents to the root of a USB drive, insert it into a compatible NEMESIS-enabled head unit, and accept the installation prompt.
+          ### Installation
 
-          **A clean reinstall resets the app's saved login, preferences, and caches.** Sign in to Stremio again afterward. This installer targets only the Stremio Auto package, not other NEMESIS applications.
+          Download **Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip**, extract its three contents to the USB drive root, insert into a fully booted NEMESIS head unit, and confirm installation.
 
-          ### Features
+          **The clean installer clears only Stremio Auto's stored login, cache and preferences.** Sign in again after installing. It does not uninstall unrelated NEMESIS apps.
 
-          - Stremio account, compatible library and Continue Watching, add-on catalogs, search, and browse.
-          - In-app ExoPlayer with seeking, aspect ratio, audio and subtitle selection, preferred English soundtrack, and bundled FFmpeg audio decoding.
-          - Bundled language flag graphics for older Android 4.4 screens.
-          - Optional VLC handoff setting, with a larger Watch button when off.
-          - Parked-use reminder settings, optional experimental GPS motion lockout, and Exit Stremio.
-          - Selected purple-blue pixel-play launcher icon and compatible NEMESIS USB installer.
+          ### Network guard
 
-          ### Limitations and safe use
+          - A root NEMESIS service (`stremiogen5w/netguard`) maintains the IPv4 and IPv6 per-app firewall. It follows the Android UID after reinstall and starts at boot.
+          - Only loopback (`lo`), Wi-Fi (`wlan+`), Bluetooth PAN (`bnep+`, `bt-pan+`), and USB hotspot (`usb+`, `rndis+`) are permitted for Stremio Auto.
+          - VLC integration now defaults **off**. Enabling the external VLC player requires acknowledging that it is outside Stremio Auto's network protection.
+          - Confirm the service is running in NEMESIS Manager → Services; its log is `/data/nemesis/logs/stremiogen5w/netguard.log`. NEMESIS 1.16+ is recommended.
 
-          This is experimental software, not an official Stremio app. Some codecs, sources, synchronization and controls may not work on every head unit. Wireless CarPlay phone-only data routing is unverified. Contributions and bug reports are welcome.
+          **Limitations:** This is not an absolute no-modem guarantee. The firewall requires an operational NEMESIS service, may take seconds to apply/reapply, and does not control Android system DNS (`netd`), VLC or other apps. Actual Gen5 routing must be verified on the vehicle. Wireless CarPlay does not itself provide a confirmed phone data route.
 
-          **Use responsibly. Never watch or operate video while driving.**
+          Existing ExoPlayer controls, bundled FFmpeg audio codecs, English audio preference, flag graphics, and selected IONIQ-style icon remain unchanged. Use only while the vehicle is parked.
           NOTES
           # Never replace assets or source behind an already published version.
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite it." >&2
-            exit 1
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it untouched."
+            exit 0
           fi
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.0.0-USB-Installer.zip" \
-            "dist/Stremio-gen5-hmg-nemesis-v1.0.0-Source.zip" \
-            --title "Stremio Auto v1.0.0" \
+          gh release create "$tag" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.0.1-USB-Installer.zip" \
+            "dist/Stremio-gen5-hmg-nemesis-v1.0.1-Source.zip" \
+            --title "Stremio Auto v1.0.1" \
             --notes-file dist/release-notes.md \
             --target "${GITHUB_SHA}"
       - uses: actions/upload-artifact@v4

@@ -27,24 +27,44 @@ version_code = int(code_match.group(1))
 package = out / "stremio-auto-nemesis-package.zip"
 manifest = (
     "[nemesis]\n"
-    "version=" + version + "\n"
+    "version=1.1\n"
     "id=stremiogen5w\n"
     "name=Stremio Auto\n"
-    "types=application\n\n"
+    "type=application,service\n"
+    "package-version=" + version + "\n"
+    "short-desc=Stremio Auto with Wi-Fi and hotspot guard\n"
+    "os=any\n"
+    "models=any\n"
+    "preuninstall=scripts/preun.sh\n\n"
     "[app.0]\n"
     "kind=apk\n"
     "path=app/StremioAuto.apk\n"
     "package=com.gen5.stremio\n"
-    "component=com.gen5.stremio/com.gen5.stremio.MainActivity\n"
+    "component=com.gen5.stremio/com.gen5.stremio.MainActivity\n\n"
+    "[service.0]\n"
+    "name=netguard\n"
+    "kind=sh\n"
+    "path=svc/netguard.sh\n"
+    "uid=root\n"
+    "mode=restart\n"
 )
 with zipfile.ZipFile(package, "w", zipfile.ZIP_DEFLATED) as archive:
     archive.writestr("NEMESIS.data", manifest)
     archive.write(apk, "app/StremioAuto.apk")
+    archive.write("svc/netguard.sh", "svc/netguard.sh")
+    archive.write("scripts/preun.sh", "scripts/preun.sh")
+    archive.write("notices/NETGUARD_LICENSE.txt", "notices/NETGUARD_LICENSE.txt")
 with zipfile.ZipFile(package) as archive:
     if archive.testzip() is not None:
         raise SystemExit("Invalid inner package ZIP")
     assert "NEMESIS.data" in archive.namelist()
     assert "app/StremioAuto.apk" in archive.namelist()
+    assert {"svc/netguard.sh", "scripts/preun.sh", "notices/NETGUARD_LICENSE.txt"}.issubset(archive.namelist())
+    assert "type=application,service" in archive.read("NEMESIS.data").decode("utf-8")
+    assert "uid=root" in archive.read("NEMESIS.data").decode("utf-8")
+    assert b"APP_PKG=com.gen5.stremio" in archive.read("svc/netguard.sh")
+    assert b"CHAIN=stremio_net" in archive.read("svc/netguard.sh")
+    assert b"iptables ip6tables" in archive.read("svc/netguard.sh")
 
 # This shell is invoked only by NEMESIS USB type=execute after the user's Yes.
 # Do not execute in recovery (Android down); do not touch any unrelated package.

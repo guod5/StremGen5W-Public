@@ -466,18 +466,35 @@ public class MainActivity extends Activity {
     vlcSwitch.setMinHeight(dp(63));
     vlcSwitch.setChecked(vlcIntegrationEnabled());
     add(vlcSwitch);
-    add(text("On by default. Show VLC as an alternative player on stream cards and in playback controls. Turn off to hide VLC and make the Watch button larger.",14));
+    add(text("Off by default for network safety. The firewall protects Stremio Auto, not VLC. A separate VLC player may use the car's modem.",14));
+    final boolean[] vlcAcknowledged={false};
     vlcSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
       public void onCheckedChanged(CompoundButton button,boolean enabled){
+        if(enabled&&!vlcAcknowledged[0]){
+          vlcSwitch.setChecked(false);
+          new AlertDialog.Builder(MainActivity.this)
+            .setTitle("VLC is not network protected")
+            .setMessage("Stremio Auto's Wi-Fi/hotspot firewall only protects this app. VLC runs separately and might stream through the car's built-in modem. Leave VLC off to avoid that risk.")
+            .setNegativeButton("Keep VLC off",null)
+            .setPositiveButton("Enable VLC anyway",new DialogInterface.OnClickListener(){
+              public void onClick(DialogInterface dialog,int which){
+                vlcAcknowledged[0]=true;
+                vlcSwitch.setChecked(true);
+                vlcAcknowledged[0]=false;
+              }
+            }).show();
+          return;
+        }
         prefs.edit().putBoolean("vlc_integration",enabled).apply();
-        // The stream screen and player read this choice whenever they open.
       }
     });
+    add(text("NETWORK: WI-FI AND HOTSPOT ONLY",17));
+    add(text("A NEMESIS service blocks this app's modem and internal Ethernet traffic while its firewall rules are active. Check NEMESIS Services for stremiogen5w/netguard. Android system DNS and VLC are outside this app-only protection.",14));
   }
 
-  // VLC fallback is optional. Preserve existing behavior for upgrades and first installs.
+  // VLC is outside our app-UID network guard; require explicit user opt-in.
   boolean vlcIntegrationEnabled(){
-    return prefs==null||prefs.getBoolean("vlc_integration",true);
+    return prefs!=null&&prefs.getBoolean("vlc_integration",false);
   }
 
   void updateMotionMonitoring(){
@@ -1032,7 +1049,7 @@ public class MainActivity extends Activity {
     add(text("No special setup: start a fresh video, watch at least 60 seconds, close VLC and return here. The app automatically measures the modem, Wi-Fi, and VLC received data while playback is open. These are diagnostic indicators, not definitive per-packet proof.",16));
     add(text(prefs.getString("video_route_report","No VLC playback measured with this build yet."),16));
     add(btn("Clear video data test result",new Runnable(){public void run(){prefs.edit().remove("video_route_report").apply();render("Diagnostics",false);}}));
-    add(text("DATA ROUTE UNVERIFIED: Android and VLC may use vehicle cellular data. Public IP is not proof of phone routing.",16));
+    add(text("NETWORK GUARD: NEMESIS service stremiogen5w/netguard blocks this app's modem traffic when active. Verify its service log and firewall status. Android DNS and VLC are outside the app UID rule.",16));
     ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
     try {
       NetworkInfo active=cm==null?null:cm.getActiveNetworkInfo();

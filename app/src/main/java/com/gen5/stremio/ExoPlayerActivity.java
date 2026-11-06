@@ -136,7 +136,7 @@ public class ExoPlayerActivity extends Activity {
   }};
 
   private boolean vlcIntegrationEnabled(){
-    return getSharedPreferences("account",0).getBoolean("vlc_integration",true);
+    return getSharedPreferences("account",0).getBoolean("vlc_integration",false);
   }
 
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+0.5f);}
