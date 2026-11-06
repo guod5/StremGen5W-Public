@@ -6,7 +6,7 @@ Stremio Auto is a hobby project created to get a usable Stremio-style client run
 
 This is a work in progress. It is **not as feature-rich or polished as official Stremio apps**, and there are known limitations, bugs, and compatibility differences. The source is shared in the hope that other developers can improve it. Issues and pull requests are welcome.
 
-**Latest release:** v1.1.0 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
+**Latest release:** v1.1.1 · **GitHub project:** `Stremio-gen5-hmg-nemesis`
 
 ## What it can do
 
@@ -20,9 +20,13 @@ This is a work in progress. It is **not as feature-rich or polished as official 
 
 Functionality depends on stream formats, third-party add-ons, network conditions, and the head unit's firmware. Not every feature from the official Stremio applications is implemented.
 
+## First launch
+
+On the first launch after installation, the app displays one combined **Welcome to Stremio Auto!** and **PARKED VEHICLE LOCK ENABLED** confirmation. The welcome says: *Before you start watching, check out Settings. You can control your internet connection, customize playback, and manage safety features.* The safety message says video playback is for use only while parked and must never be used while driving. After the user taps **I'm Parked — Let's Go**, the app saves the welcome as seen. Later launches show only the regular **PARKED VEHICLE REQUIRED** reminder (unless disabled in Settings). Exiting without confirming leaves the welcome pending. A clean reinstall resets the welcome preference.
+
 ## Installation
 
-Download **Stremio-gen5-hmg-nemesis-v1.1.0-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
+Download **Stremio-gen5-hmg-nemesis-v1.1.1-USB-Installer.zip** from GitHub Releases. Extract the three items inside it directly onto the root of your USB flash drive, then connect it to a compatible NEMESIS-enabled head unit and follow the installation prompt.
 
 The NEMESIS installer checks the existing installation, removes the previous version when appropriate, and installs the new APK. **A clean reinstall clears the app's saved login, cached media metadata and preferences.** You will need to sign in again afterward.
 

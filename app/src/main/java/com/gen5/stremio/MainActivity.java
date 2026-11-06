@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
   }
   int dp(int x){return (int)(x*getResources().getDisplayMetrics().density+.5f);}
   public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("account",0);
-    parkedConfirmed=prefs.getBoolean("disable_popup",false);
+    parkedConfirmed=prefs.getBoolean("disable_popup",false)&&prefs.getBoolean("welcome_seen",false);
     auth=prefs.getString("auth","");verifiedAccountEmail=prefs.getString("verified_account_email","");
     restoreAccountCache();
     selectedId=b==null?prefs.getString("selected_id",""):b.getString("selected_id",prefs.getString("selected_id",""));
@@ -117,7 +117,11 @@ public class MainActivity extends Activity {
     showParkedConfirmation();
   }
   void showParkedConfirmation(){
-    if(prefs!=null&&prefs.getBoolean("disable_popup",false)){parkedConfirmed=true;return;}
+    // First launch combines the requested welcome with the parking confirmation.
+    final boolean firstLaunch=prefs!=null&&!prefs.getBoolean("welcome_seen",false);
+    if(!firstLaunch&&prefs!=null&&prefs.getBoolean("disable_popup",false)){
+      parkedConfirmed=true;return;
+    }
     if(parkedConfirmed||warningShown||closingApp||isFinishing()||
       (parkedDialog!=null&&parkedDialog.isShowing()))return;
     warningShown=true;
@@ -130,19 +134,37 @@ public class MainActivity extends Activity {
     panel.setOrientation(1);
     panel.setPadding(dp(19),dp(16),dp(19),dp(16));
     panel.setBackgroundDrawable(shape(surface,17));
-    TextView heading=text("PARKED VEHICLE REQUIRED",20);
+    if(firstLaunch){
+      TextView welcomeHeading=text("Welcome to Stremio Auto!",21);
+      welcomeHeading.setTextColor(accent);
+      welcomeHeading.setTypeface(null,1);
+      welcomeHeading.setPadding(dp(8),dp(1),dp(8),dp(6));
+      panel.addView(welcomeHeading);
+      TextView welcomeCopy=text("Before you start watching, check out Settings. You can control your internet connection, customize playback, and manage safety features.",16);
+      welcomeCopy.setTextColor(Color.WHITE);
+      welcomeCopy.setPadding(dp(8),dp(2),dp(8),dp(15));
+      panel.addView(welcomeCopy);
+      View divider=new View(this);
+      divider.setBackgroundColor(0xff323c49);
+      LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(1));
+      line.setMargins(dp(8),0,dp(8),dp(11));
+      panel.addView(divider,line);
+    }
+    TextView heading=text(firstLaunch?"PARKED VEHICLE LOCK ENABLED":"PARKED VEHICLE REQUIRED",20);
     heading.setTextColor(accent);
     heading.setTypeface(null,1);
     heading.setPadding(dp(8),dp(1),dp(8),dp(4));
     panel.addView(heading);
-    TextView copy=text("Confirm your vehicle is fully parked. Video playback is for use only while parked. Never watch or operate video while driving.",16);
+    TextView copy=text(firstLaunch?"Video playback is for use only while parked. Never watch or operate video while driving.":"Confirm your vehicle is fully parked. Video playback is for use only while parked. Never watch or operate video while driving.",16);
     copy.setTextColor(Color.WHITE);
     copy.setPadding(dp(8),dp(2),dp(8),dp(12));
     panel.addView(copy);
     LinearLayout actions=new LinearLayout(this);
     actions.setOrientation(0);
     Button exit=btn("Exit App",new Runnable(){public void run(){dialog.dismiss();parkedDialog=null;finish();}});
-    Button confirm=btn("I'm Parked - Continue",new Runnable(){public void run(){
+    Button confirm=btn(firstLaunch?"I'm Parked — Let's Go":"I'm Parked - Continue",new Runnable(){public void run(){
+      // Exiting without confirming leaves the welcome pending.
+      if(firstLaunch)prefs.edit().putBoolean("welcome_seen",true).commit();
       parkedConfirmed=true;dialog.dismiss();parkedDialog=null;refreshMotionDialog();
     }});
     exit.setTextSize(15);confirm.setTextSize(15);
